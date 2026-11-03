@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.3](https://github.com/inoue723/db-editor/compare/v0.0.2...v0.0.3) (2026-11-03)
+
+
+### Features
+
+* implement v0.1 (connections, table browsing, SQL editor, copy) ([#10](https://github.com/inoue723/db-editor/issues/10)) ([50423eb](https://github.com/inoue723/db-editor/commit/50423eb75ba1ae44f9f399a1a476716531e4153a))
+
 ## [0.0.2](https://github.com/inoue723/db-editor/compare/v0.0.1...v0.0.2) (2026-11-03)
 
 
