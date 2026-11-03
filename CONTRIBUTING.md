@@ -48,3 +48,40 @@ Integration tests use `PG_IMAGE_TAG` (default `17-alpine`). CI runs 12 and 18 on
 PR titles follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat: ...`,
 `fix: ...`), checked in CI. PRs are squash-merged, and release-please builds the changelog and
 version from those titles.
+
+## Releasing
+
+Merging the release PR that release-please opens creates a **draft** GitHub Release with a tag.
+The Release workflow then builds macOS (arm64, x86_64) and Linux, attaches the installers and
+the signed updater artifacts, and writes `latest.json`. Nothing reaches users until the draft is
+published: installed apps read `releases/latest/download/latest.json`, which only resolves to a
+published release.
+
+### Versions
+
+Before v0.1 ships, releases are `0.0.x` so testers already get updates in place:
+`bump-patch-for-minor-pre-major` makes `feat:` bump the patch number. To cut a milestone such as
+v0.1.0, add `Release-As: 0.1.0` to the body of a commit on `main`.
+
+### Auto-update
+
+The app uses the [Tauri updater](https://v2.tauri.app/plugin/updater/). It checks at startup and
+every 6 hours, and asks before downloading. Updates are verified against the public key in
+`plugins.updater.pubkey` (`src-tauri/tauri.conf.json`), and `requireSignedVersion` rejects a
+manifest that pairs a new version number with an older signed build.
+
+The signing key pair was generated with `pnpm tauri signer generate`. The public key is in
+`plugins.updater.pubkey`. The private key and its password are the `TAURI_SIGNING_PRIVATE_KEY`
+and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secrets of the `release` environment; the build fails
+without them. Keep a backup of the private key: losing it means installed apps can no longer be
+updated, and replacing the key needs a release signed with the old one that ships the new pubkey.
+
+Platform notes:
+
+- **macOS (ad-hoc signed during v0.x).** The first install still needs the Gatekeeper bypass
+  (right-click → Open, or `xattr -dr com.apple.quarantine`). Updates downloaded by the app do not
+  get the quarantine attribute, so they install and relaunch without that prompt. Each ad-hoc
+  build has a different code signature, so macOS may ask again for Keychain access to saved
+  passwords after an update. Developer ID signing removes this.
+- **Linux.** AppImage replaces itself in place. `.deb` and `.rpm` installs are updated with
+  `dpkg -i` / `rpm -U` through `pkexec`, so the user is asked for their password.
