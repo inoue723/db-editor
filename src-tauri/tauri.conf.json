@@ -42,7 +42,17 @@
     "macOS": {
       "minimumSystemVersion": "13.0",
       "signingIdentity": "-"
-    }
+    },
+    "createUpdaterArtifacts": true
   },
-  "mainBinaryName": "db-editor"
+  "mainBinaryName": "db-editor",
+  "plugins": {
+    "updater": {
+      "pubkey": "REPLACE_WITH_UPDATER_PUBLIC_KEY",
+      "endpoints": [
+        "https://github.com/inoue723/db-editor/releases/latest/download/latest.json"
+      ],
+      "requireSignedVersion": true
+    }
+  }
 }

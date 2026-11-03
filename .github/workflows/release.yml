@@ -63,19 +63,31 @@ jobs:
         if: runner.os == 'macOS'
         run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
       - run: pnpm install --frozen-lockfile
+      - name: Check the updater public key
+        run: |
+          if grep -q REPLACE_WITH_UPDATER_PUBLIC_KEY src-tauri/tauri.conf.json; then
+            echo "::error file=src-tauri/tauri.conf.json::Set plugins.updater.pubkey (see CONTRIBUTING.md, Releasing)"
+            exit 1
+          fi
       # Until an Apple Developer ID is available, macOS builds use ad-hoc signing
       # (bundle.macOS.signingIdentity = "-") and are not notarized.
       # When it is, add APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY,
-      # APPLE_API_ISSUER, APPLE_API_KEY and APPLE_API_KEY_PATH to the release environment,
-      # and TAURI_SIGNING_PRIVATE_KEY(_PASSWORD) once the updater is enabled.
+      # APPLE_API_ISSUER, APPLE_API_KEY and APPLE_API_KEY_PATH to the release environment.
       # With no tagName (manual runs), tauri-action only builds and does not touch Releases.
+      # release-please creates the release as a draft (release-please-config.json), so
+      # releaseDraft must be true for tauri-action to find it by tag.
       - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signs the updater artifacts (bundle.createUpdaterArtifacts). Without it the build fails.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ needs.release-please.outputs.tag_name }}
           releaseName: db editor ${{ needs.release-please.outputs.tag_name }}
           releaseDraft: true
+          # The three matrix jobs would race to rewrite latest.json; the updater-json job writes it once.
+          uploadUpdaterJson: false
           args: ${{ matrix.args }}
       - name: Upload installers (manual runs)
         if: github.event_name == 'workflow_dispatch'
@@ -89,3 +101,53 @@ jobs:
             target/**/release/bundle/rpm/*.rpm
           if-no-files-found: error
           retention-days: 14
+
+  # Writes latest.json, the manifest the in-app updater reads from
+  # https://github.com/<repo>/releases/latest/download/latest.json.
+  # The release stays a draft, so installed apps see the update only once it is published.
+  updater-json:
+    needs: [release-please, build]
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Generate and upload latest.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: |
+          set -euo pipefail
+          dir="$(mktemp -d)"
+          gh release download "$TAG" --pattern '*.sig' --dir "$dir"
+          base="https://github.com/${GH_REPO}/releases/download/${TAG}"
+          platforms='{}'
+          add() { # <platform key> <asset name>
+            platforms="$(jq --arg key "$1" --arg url "$base/$2" --rawfile sig "$dir/$2.sig" \
+              '.[$key] = {url: $url, signature: ($sig | rtrimstr("\n"))}' <<<"$platforms")"
+          }
+          for sig in "$dir"/*.sig; do
+            asset="$(basename "$sig" .sig)"
+            case "$asset" in
+              *_aarch64.app.tar.gz) add darwin-aarch64 "$asset"; add darwin-aarch64-app "$asset" ;;
+              *_x64.app.tar.gz) add darwin-x86_64 "$asset"; add darwin-x86_64-app "$asset" ;;
+              *.AppImage) add linux-x86_64 "$asset"; add linux-x86_64-appimage "$asset" ;;
+              *.deb) add linux-x86_64-deb "$asset" ;;
+              *.rpm) add linux-x86_64-rpm "$asset" ;;
+            esac
+          done
+          for key in darwin-aarch64 darwin-x86_64 linux-x86_64 linux-x86_64-deb linux-x86_64-rpm; do
+            if ! jq -e --arg key "$key" 'has($key)' <<<"$platforms" >/dev/null; then
+              echo "::error::No signed updater artifact for $key"
+              exit 1
+            fi
+          done
+          gh release view "$TAG" --json body --jq .body >"$dir/notes.md"
+          jq -n --arg version "$VERSION" --rawfile notes "$dir/notes.md" \
+            --arg pub_date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson platforms "$platforms" \
+            '{version: $version, notes: $notes, pub_date: $pub_date, platforms: $platforms}' \
+            >"$dir/latest.json"
+          cat "$dir/latest.json"
+          gh release upload "$TAG" "$dir/latest.json" --clobber

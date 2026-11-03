@@ -41,6 +41,10 @@ pub fn run() {
     }
 
     let result = tauri::Builder::default()
+        // Restarts the app after an update has been installed.
+        .plugin(tauri_plugin_process::init())
+        // Checks GitHub Releases for a signed update (see `plugins.updater` in tauri.conf.json).
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);

@@ -48,3 +48,41 @@ Integration tests use `PG_IMAGE_TAG` (default `17-alpine`). CI runs 12 and 18 on
 PR titles follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat: ...`,
 `fix: ...`), checked in CI. PRs are squash-merged, and release-please builds the changelog and
 version from those titles.
+
+## Releasing
+
+Merging the release PR that release-please opens creates a **draft** GitHub Release with a tag.
+The Release workflow then builds macOS (arm64, x86_64) and Linux, attaches the installers and
+the signed updater artifacts, and writes `latest.json`. Nothing reaches users until the draft is
+published: installed apps read `releases/latest/download/latest.json`, which only resolves to a
+published release.
+
+### Auto-update
+
+The app uses the [Tauri updater](https://v2.tauri.app/plugin/updater/). It checks at startup and
+every 6 hours, and asks before downloading. Updates are verified against the public key in
+`plugins.updater.pubkey` (`src-tauri/tauri.conf.json`), and `requireSignedVersion` rejects a
+manifest that pairs a new version number with an older signed build.
+
+One-time setup:
+
+1. Generate the key pair locally and keep the private key safe. Losing it means installed apps
+   can no longer be updated.
+   ```sh
+   pnpm tauri signer generate -w ~/.tauri/db-editor.key
+   ```
+2. Put the contents of `~/.tauri/db-editor.key.pub` in `plugins.updater.pubkey`.
+   The Release workflow fails while the placeholder is there.
+3. In the repository settings, add to the `release` environment the secrets
+   `TAURI_SIGNING_PRIVATE_KEY` (contents of `~/.tauri/db-editor.key`) and
+   `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
+
+Platform notes:
+
+- **macOS (ad-hoc signed during v0.x).** The first install still needs the Gatekeeper bypass
+  (right-click → Open, or `xattr -dr com.apple.quarantine`). Updates downloaded by the app do not
+  get the quarantine attribute, so they install and relaunch without that prompt. Each ad-hoc
+  build has a different code signature, so macOS may ask again for Keychain access to saved
+  passwords after an update. Developer ID signing removes this.
+- **Linux.** AppImage replaces itself in place. `.deb` and `.rpm` installs are updated with
+  `dpkg -i` / `rpm -U` through `pkexec`, so the user is asked for their password.
