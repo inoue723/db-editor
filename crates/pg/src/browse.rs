@@ -31,7 +31,7 @@ pub enum PageCursor {
     After { key: Vec<String> },
     /// Skip this many rows (when the table has no key or a custom sort is used).
     Offset {
-        #[specta(type = f64)]
+        #[specta(type = u32)]
         offset: u64,
     },
 }

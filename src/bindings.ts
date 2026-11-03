@@ -40,7 +40,7 @@ export const commands = {
 	/**  Fetches one page of table rows. */
 	fetchPage: (request: PageRequest) => typedError<Page_Serialize, CommandError_Serialize>(__TAURI_INVOKE("fetch_page", { request })),
 	/**  Counts rows of another table that reference a row, up to `limit + 1`. */
-	countReferences: (schema: string, table: string, columns: string[], values: (string | null)[], limit: number) => typedError<number | null, CommandError_Serialize>(__TAURI_INVOKE("count_references", { schema, table, columns, values, limit })),
+	countReferences: (schema: string, table: string, columns: string[], values: (string | null)[], limit: number) => typedError<number, CommandError_Serialize>(__TAURI_INVOKE("count_references", { schema, table, columns, values, limit })),
 	/**  Runs SQL from the editor on the window's editor session. */
 	runSql: (sql: string, mode: RunMode, allowWrites: boolean) => typedError<RunResult_Serialize, CommandError_Serialize>(__TAURI_INVOKE("run_sql", { sql, mode, allowWrites })),
 	/**  Cancels the query running in the editor. */
@@ -332,16 +332,16 @@ export type Outcome = Outcome_Serialize | Outcome_Deserialize;
 /**  What one statement produced. */
 export type Outcome_Deserialize = { kind: "rows"; columns: ResultColumn_Deserialize[]; rows: ((string | null)[])[]; 
 /**  Rows returned by the server, including those beyond [`MAX_RESULT_ROWS`]. */
-total_rows: number | null } | { kind: "command"; 
+totalRows: number } | { kind: "command"; 
 /**  The statement's first keyword, for example `UPDATE`. */
-command: string; rows_affected: number | null } | { kind: "error"; error: ErrorInfo_Deserialize };
+command: string; rowsAffected: number } | { kind: "error"; error: ErrorInfo_Deserialize };
 
 /**  What one statement produced. */
 export type Outcome_Serialize = { kind: "rows"; columns: ResultColumn_Serialize[]; rows: ((string | null)[])[]; 
 /**  Rows returned by the server, including those beyond [`MAX_RESULT_ROWS`]. */
-total_rows: number | null } | { kind: "command"; 
+totalRows: number } | { kind: "command"; 
 /**  The statement's first keyword, for example `UPDATE`. */
-command: string; rows_affected: number | null } | { kind: "error"; error: ErrorInfo_Serialize };
+command: string; rowsAffected: number } | { kind: "error"; error: ErrorInfo_Serialize };
 
 /**  A page of rows. Values are PostgreSQL's text output; `None` is NULL. */
 export type Page = Page_Serialize | Page_Deserialize;
@@ -353,7 +353,7 @@ export type PageCursor =
 /**  Rows whose key is greater than these values (keyset paging). */
 { kind: "after"; key: string[] } | 
 /**  Skip this many rows (when the table has no key or a custom sort is used). */
-{ kind: "offset"; offset: number | null };
+{ kind: "offset"; offset: number };
 
 /**  A request for one page of a table. */
 export type PageRequest = {

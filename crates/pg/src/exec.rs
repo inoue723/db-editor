@@ -24,19 +24,23 @@ pub struct ResultColumn {
 
 /// What one statement produced.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
-#[serde(tag = "kind", rename_all = "camelCase")]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum Outcome {
     Rows {
         columns: Vec<ResultColumn>,
         rows: Vec<Vec<Option<String>>>,
         /// Rows returned by the server, including those beyond [`MAX_RESULT_ROWS`].
-        #[specta(type = f64)]
+        #[specta(type = u32)]
         total_rows: u64,
     },
     Command {
         /// The statement's first keyword, for example `UPDATE`.
         command: String,
-        #[specta(type = f64)]
+        #[specta(type = u32)]
         rows_affected: u64,
     },
     Error {

@@ -4,6 +4,19 @@ PostgreSQL GUI client for macOS and Linux, built with Tauri 2 (Rust) and React.
 
 Status: early development. Nothing to download yet.
 
+v0.1 (read and query) covers:
+
+- Saved connections with URL paste, SSL modes, passwords in the OS keychain, a read-only switch
+  and environment labels (a red band on production windows)
+- Schema tree with estimated row counts and a filter
+- Table browsing: virtual scrolling, 500-row pages, multi-column sort, a filter bar (AND/OR or raw
+  `WHERE`), foreign key jumps and reverse references, and a read-only structure view
+- SQL editor: run the statement at the cursor or all, cancel, format, history, saved queries,
+  per-statement result tabs and a transaction indicator
+- Copy as TSV, CSV, JSON, Markdown, `INSERT`, `UPDATE` or `WHERE`
+
+SSH tunnels are not in this build yet.
+
 ## Development
 
 Requirements:

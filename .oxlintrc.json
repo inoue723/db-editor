@@ -15,7 +15,18 @@
     "typescript/await-thenable": "error",
     "typescript/no-explicit-any": "error",
     "import/no-cycle": "error",
-    "no-console": ["warn", { "allow": ["warn", "error"] }]
+    "no-console": [
+      "warn",
+      {
+        "allow": ["warn", "error"]
+      }
+    ],
+    "import/no-unassigned-import": [
+      "warn",
+      {
+        "allow": ["**/*.css"]
+      }
+    ]
   },
   "ignorePatterns": ["src/bindings.ts", "dist/**", "target/**"]
 }

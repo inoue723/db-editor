@@ -396,13 +396,13 @@ pub async fn count_references(
     columns: Vec<String>,
     values: Vec<Option<String>>,
     limit: u32,
-) -> Result<f64, CommandError> {
+) -> Result<u32, CommandError> {
     let c = connected(&window, &state)?;
     let count =
         browse::count_matching(c.browse.client(), &schema, &table, &columns, &values, limit)
             .await?;
-    #[allow(clippy::cast_precision_loss)] // Capped at `limit + 1`.
-    Ok(count as f64)
+    // The query stops counting at `limit + 1`.
+    Ok(u32::try_from(count).unwrap_or(u32::MAX))
 }
 
 /// Which statements of the editor text to run.

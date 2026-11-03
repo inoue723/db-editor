@@ -1,6 +1,7 @@
 //! Catalog, paging and SQL execution against a real PostgreSQL (testcontainers).
 //!
 //! Set `PG_IMAGE_TAG` to test another server version. These tests need Docker.
+#![allow(clippy::unwrap_used)]
 
 use db_editor_core::filter::{Conjunction, Filter, FilterCondition, FilterOp};
 use db_editor_pg::browse::{self, PageCursor, PageRequest, SortKey};
