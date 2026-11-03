@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.4](https://github.com/inoue723/db-editor/compare/v0.0.3...v0.0.4) (2026-11-03)
+
+
+### Bug Fixes
+
+* merge the release PR and publish the release automatically ([#12](https://github.com/inoue723/db-editor/issues/12)) ([60a093e](https://github.com/inoue723/db-editor/commit/60a093e1981cfe0797af88ec66409d8a457f4ff1))
+
 ## [0.0.3](https://github.com/inoue723/db-editor/compare/v0.0.2...v0.0.3) (2026-11-03)
 
 
