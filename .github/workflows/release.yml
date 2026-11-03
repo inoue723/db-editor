@@ -77,9 +77,22 @@ jobs:
             os: ubuntu-22.04
             args: ""
     steps:
+      # Build the tagged release commit. The run was started by the commit before the release PR
+      # (release-please merges it within this run), so the default checkout has the old version.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
           persist-credentials: false
+      - name: Check the app version matches the tag
+        if: needs.release-please.outputs.tag_name != ''
+        env:
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          version="$(jq -r .version src-tauri/tauri.conf.json)"
+          if [ "v$version" != "$TAG" ]; then
+            echo "::error::tauri.conf.json has version $version but the release tag is $TAG"
+            exit 1
+          fi
       - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -156,6 +169,11 @@ jobs:
           }
           for sig in "$dir"/*.sig; do
             asset="$(basename "$sig" .sig)"
+            # The updater rejects a signature bound to another version (requireSignedVersion).
+            if ! base64 -d "$sig" | grep -q "version:${version}\$"; then
+              echo "::error::$asset is not signed for version $version"
+              exit 1
+            fi
             case "$asset" in
               *_aarch64.app.tar.gz) add darwin-aarch64 "$asset"; add darwin-aarch64-app "$asset" ;;
               *_x64.app.tar.gz) add darwin-x86_64 "$asset"; add darwin-x86_64-app "$asset" ;;
