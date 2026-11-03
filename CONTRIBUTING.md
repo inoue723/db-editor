@@ -55,11 +55,19 @@ version from those titles.
 
 ## Releasing
 
-Merging the release PR that release-please opens creates a **draft** GitHub Release with a tag.
-The Release workflow then builds macOS (arm64, x86_64) and Linux, attaches the installers and
-the signed updater artifacts, and writes `latest.json`. Nothing reaches users until the draft is
-published: installed apps read `releases/latest/download/latest.json`, which only resolves to a
-published release.
+Releases are automatic. When a releasable commit (`feat:`, `fix:`, `perf:`, ...) lands on `main`,
+the Release workflow:
+
+1. lets release-please open the release PR (version bump + changelog) and merges it at once,
+2. tags the release and creates a **draft** GitHub Release,
+3. builds macOS (arm64, x86_64) and Linux and attaches the installers and signed updater artifacts,
+4. writes `latest.json` and publishes the release.
+
+`chore:`, `ci:`, `build:`, `docs:`, `test:` and `refactor:` commits do not trigger a release. Installed
+apps read `releases/latest/download/latest.json`, which only resolves to a published release, so
+they never see a release whose builds are still running. Do not publish the draft by hand.
+
+If a build fails, the release stays a draft. Fix the cause and re-run the failed jobs.
 
 ### Versions
 
