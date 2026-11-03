@@ -10,7 +10,15 @@ on:
 permissions:
   contents: read
 
+# Releases are serialized so two quick merges cannot build the same tag twice.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
+  # Fully automatic: a releasable merge (feat:, fix:, ...) opens the release PR, this job
+  # merges it right away, and the second release-please run tags it and creates the draft.
+  # Commits like chore:/ci:/build:/docs: do not trigger a release.
   release-please:
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04
@@ -18,14 +26,31 @@ jobs:
       contents: write
       pull-requests: write
     outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
+      release_created: ${{ steps.release.outputs.release_created || steps.tag.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name || steps.tag.outputs.tag_name }}
     steps:
       - id: release
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+      # A push made with GITHUB_TOKEN does not start new workflow runs, so the release PR is
+      # merged and released within this run instead of waiting for another push to main.
+      - name: Merge the release PR
+        id: merge
+        if: steps.release.outputs.prs_created == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ fromJSON(steps.release.outputs.pr).number }}
+        run: gh pr merge "$PR_NUMBER" --squash
+      - id: tag
+        if: steps.merge.outcome == 'success'
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          skip-github-pull-request: true
 
   build:
     needs: release-please
@@ -80,7 +105,7 @@ jobs:
           tagName: ${{ needs.release-please.outputs.tag_name }}
           releaseName: db editor ${{ needs.release-please.outputs.tag_name }}
           releaseDraft: true
-          # The three matrix jobs would race to rewrite latest.json; the updater-json job writes it once.
+          # The three matrix jobs would race to rewrite latest.json; the publish job writes it once.
           uploadUpdaterJson: false
           args: ${{ matrix.args }}
       - name: Upload installers (manual runs)
@@ -97,16 +122,17 @@ jobs:
           retention-days: 14
 
   # Writes latest.json, the manifest the in-app updater reads from
-  # https://github.com/<repo>/releases/latest/download/latest.json.
-  # The release stays a draft, so installed apps see the update only once it is published.
-  updater-json:
+  # https://github.com/<repo>/releases/latest/download/latest.json, then publishes the draft.
+  # Publishing only after every build and latest.json are uploaded means installed apps never
+  # see a release with missing assets. Do not publish the draft by hand.
+  publish:
     needs: [release-please, build]
     if: needs.release-please.outputs.release_created == 'true'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
-      - name: Generate and upload latest.json
+      - name: Generate latest.json and publish the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
@@ -116,6 +142,11 @@ jobs:
           # release-please's `version` output is empty for this root package, so derive it from the tag.
           version="${TAG#v}"
           dir="$(mktemp -d)"
+          if [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" != true ]; then
+            echo "::error::Release $TAG is not a draft (published by hand before the builds finished?)." \
+              "Delete that release (keep the tag) and re-run this job."
+            exit 1
+          fi
           gh release download "$TAG" --pattern '*.sig' --dir "$dir"
           base="https://github.com/${GH_REPO}/releases/download/${TAG}"
           platforms='{}'
@@ -146,3 +177,4 @@ jobs:
             >"$dir/latest.json"
           cat "$dir/latest.json"
           gh release upload "$TAG" "$dir/latest.json" --clobber
+          gh release edit "$TAG" --draft=false --latest
