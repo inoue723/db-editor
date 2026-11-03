@@ -1,4 +1,13 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
-  "ignorePatterns": ["src/bindings.ts", "src-tauri/**", "crates/**", "target/**", "pnpm-lock.yaml"]
+  "ignorePatterns": [
+    "src/bindings.ts",
+    "src-tauri/**",
+    "crates/**",
+    "target/**",
+    "pnpm-lock.yaml",
+    // Written by release-please.
+    "CHANGELOG.md",
+    ".release-please-manifest.json"
+  ]
 }
