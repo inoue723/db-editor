@@ -111,9 +111,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ needs.release-please.outputs.tag_name }}
-          VERSION: ${{ needs.release-please.outputs.version }}
         run: |
           set -euo pipefail
+          # release-please's `version` output is empty for this root package, so derive it from the tag.
+          version="${TAG#v}"
           dir="$(mktemp -d)"
           gh release download "$TAG" --pattern '*.sig' --dir "$dir"
           base="https://github.com/${GH_REPO}/releases/download/${TAG}"
@@ -139,7 +140,7 @@ jobs:
             fi
           done
           gh release view "$TAG" --json body --jq .body >"$dir/notes.md"
-          jq -n --arg version "$VERSION" --rawfile notes "$dir/notes.md" \
+          jq -n --arg version "$version" --rawfile notes "$dir/notes.md" \
             --arg pub_date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson platforms "$platforms" \
             '{version: $version, notes: $notes, pub_date: $pub_date, platforms: $platforms}' \
             >"$dir/latest.json"

@@ -40,3 +40,9 @@ test("shows the error returned by Rust", async () => {
     "Error: unterminated quoted field starting on line 1",
   );
 });
+
+test("shows the app version", () => {
+  render(<App />);
+
+  expect(screen.getByText(/^Version \d+\.\d+\.\d+/)).toBeTruthy();
+});
