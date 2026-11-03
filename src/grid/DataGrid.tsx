@@ -163,7 +163,9 @@ export const DataGrid = forwardRef<GridHandle, Props>(function DataGrid(
     setEditor(null);
   }, [resetKey, setEditor]);
 
-  useEffect(() => {
+  // A layout effect, so that the parent's command handlers see the new selection
+  // before the next key press (a key right after a click must act on the clicked cell).
+  useLayoutEffect(() => {
     onActiveRowChange?.(activeRow(selection), selection);
   }, [selection, onActiveRowChange]);
 
