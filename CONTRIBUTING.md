@@ -59,7 +59,8 @@ published release.
 
 ### Versions
 
-Before v0.1 ships, releases are `0.0.x` so testers already get updates in place:
+Before v0.1 ships, releases are `0.0.x` so testers already get updates in place. The first
+release is `0.0.1` (`initial-version`; without it release-please starts at `1.0.0`), and
 `bump-patch-for-minor-pre-major` makes `feat:` bump the patch number. To cut a milestone such as
 v0.1.0, add `Release-As: 0.1.0` to the body of a commit on `main`.
 
