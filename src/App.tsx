@@ -23,6 +23,7 @@ export function App() {
   return (
     <main>
       <h1>db editor</h1>
+      <p>Version {import.meta.env.APP_VERSION}</p>
       <label htmlFor="tsv-input">Paste TSV</label>
       <textarea id="tsv-input" value={text} onChange={(e) => setText(e.currentTarget.value)} />
       <button type="button" onClick={() => void handleParse()}>
