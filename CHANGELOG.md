@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.5](https://github.com/inoue723/db-editor/compare/v0.0.4...v0.0.5) (2026-11-03)
+
+
+### Bug Fixes
+
+* build releases from the tagged commit ([#14](https://github.com/inoue723/db-editor/issues/14)) ([65afdd8](https://github.com/inoue723/db-editor/commit/65afdd8adcd8528ce328cbe7c508a856f4fbb1d6))
+
 ## [0.0.4](https://github.com/inoue723/db-editor/compare/v0.0.3...v0.0.4) (2026-11-03)
 
 
