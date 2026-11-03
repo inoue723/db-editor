@@ -3,12 +3,16 @@ name: Release
 on:
   push:
     branches: [main]
+  # Manual run: builds the installers and uploads them as workflow artifacts,
+  # without creating a tag or a GitHub Release.
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   release-please:
+    if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -25,7 +29,10 @@ jobs:
 
   build:
     needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
+    # release-please is skipped on manual runs, so `!cancelled()` keeps this job from being skipped too.
+    if: >-
+      !cancelled() && (github.event_name == 'workflow_dispatch' ||
+      needs.release-please.outputs.release_created == 'true')
     name: build (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
     environment: release
@@ -61,6 +68,7 @@ jobs:
       # When it is, add APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY,
       # APPLE_API_ISSUER, APPLE_API_KEY and APPLE_API_KEY_PATH to the release environment,
       # and TAURI_SIGNING_PRIVATE_KEY(_PASSWORD) once the updater is enabled.
+      # With no tagName (manual runs), tauri-action only builds and does not touch Releases.
       - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -69,3 +77,15 @@ jobs:
           releaseName: db editor ${{ needs.release-please.outputs.tag_name }}
           releaseDraft: true
           args: ${{ matrix.args }}
+      - name: Upload installers (manual runs)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: db-editor-${{ matrix.name }}
+          path: |
+            target/**/release/bundle/dmg/*.dmg
+            target/**/release/bundle/appimage/*.AppImage
+            target/**/release/bundle/deb/*.deb
+            target/**/release/bundle/rpm/*.rpm
+          if-no-files-found: error
+          retention-days: 14
