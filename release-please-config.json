@@ -4,6 +4,7 @@
   "include-component-in-tag": false,
   "bump-minor-pre-major": true,
   "bump-patch-for-minor-pre-major": true,
+  "initial-version": "0.0.1",
   "draft": true,
   "force-tag-creation": true,
   "packages": {
