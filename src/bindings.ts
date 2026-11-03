@@ -6,12 +6,649 @@ import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 /** Commands */
 export const commands = {
 	/**  Parses clipboard text as TSV. */
-	parseTsv: (text: string) => typedError<string[][], CommandError>(__TAURI_INVOKE("parse_tsv", { text })),
+	parseTsv: (text: string) => typedError<string[][], CommandError_Serialize>(__TAURI_INVOKE("parse_tsv", { text })),
+	/**  Lists saved connections. */
+	listConnections: () => typedError<ConnectionProfile_Serialize[], CommandError_Serialize>(__TAURI_INVOKE("list_connections")),
+	/**  Saves a connection (a new one when its id is empty) and returns it with its id. */
+	saveConnection: (profile: ConnectionProfile_Deserialize, password: PasswordUpdate) => typedError<ConnectionProfile_Serialize, CommandError_Serialize>(__TAURI_INVOKE("save_connection", { profile, password })),
+	/**  Deletes a connection and its stored password. */
+	deleteConnection: (id: string) => typedError<null, CommandError_Serialize>(__TAURI_INVOKE("delete_connection", { id })),
+	/**  Whether a password is stored for the connection. */
+	hasSavedPassword: (id: string) => typedError<boolean, CommandError_Serialize>(__TAURI_INVOKE("has_saved_password", { id })),
+	/**  Splits a `postgres://` URL into the dialog's fields. */
+	parseConnectionUrl: (url: string) => typedError<ParsedUrl_Serialize, CommandError_Serialize>(__TAURI_INVOKE("parse_connection_url", { url })),
+	/**
+	 *  Tries to connect with the dialog's settings. When `password` is `None`, the stored
+	 *  password of the profile is used.
+	 */
+	testConnection: (profile: ConnectionProfile_Deserialize, password: string | null) => typedError<TestResult, CommandError_Serialize>(__TAURI_INVOKE("test_connection", { profile, password })),
+	/**  Opens a window for a saved connection. The window connects when it loads. */
+	openConnectionWindow: (id: string) => typedError<null, CommandError_Serialize>(__TAURI_INVOKE("open_connection_window", { id })),
+	/**
+	 *  Connects the calling window to its profile, optionally to another database on
+	 *  the same server. Replaces an existing connection of the window.
+	 */
+	sessionConnect: (database: string | null) => typedError<SessionInfo_Serialize, CommandError_Serialize>(__TAURI_INVOKE("session_connect", { database })),
+	/**  Lists databases on the server of the window's connection. */
+	listDatabases: () => typedError<string[], CommandError_Serialize>(__TAURI_INVOKE("list_databases")),
+	/**  Reads the schema tree. */
+	loadSchemas: () => typedError<Schema_Serialize[], CommandError_Serialize>(__TAURI_INVOKE("load_schemas")),
+	/**  Reads columns, keys, indexes and references of a relation. */
+	tableInfo: (schema: string, table: string) => typedError<TableInfo_Serialize, CommandError_Serialize>(__TAURI_INVOKE("table_info", { schema, table })),
+	/**  Builds the DDL of a relation. */
+	tableDdl: (schema: string, table: string) => typedError<string, CommandError_Serialize>(__TAURI_INVOKE("table_ddl", { schema, table })),
+	/**  Fetches one page of table rows. */
+	fetchPage: (request: PageRequest) => typedError<Page_Serialize, CommandError_Serialize>(__TAURI_INVOKE("fetch_page", { request })),
+	/**  Counts rows of another table that reference a row, up to `limit + 1`. */
+	countReferences: (schema: string, table: string, columns: string[], values: (string | null)[], limit: number) => typedError<number | null, CommandError_Serialize>(__TAURI_INVOKE("count_references", { schema, table, columns, values, limit })),
+	/**  Runs SQL from the editor on the window's editor session. */
+	runSql: (sql: string, mode: RunMode, allowWrites: boolean) => typedError<RunResult_Serialize, CommandError_Serialize>(__TAURI_INVOKE("run_sql", { sql, mode, allowWrites })),
+	/**  Cancels the query running in the editor. */
+	cancelQuery: () => typedError<null, CommandError_Serialize>(__TAURI_INVOKE("cancel_query")),
+	/**  Returns the query history of the window's connection, newest first. */
+	queryHistory: () => typedError<HistoryEntry[], CommandError_Serialize>(__TAURI_INVOKE("query_history")),
+	/**  Lists the saved queries of the window's connection. */
+	listSavedQueries: () => typedError<SavedQuery[], CommandError_Serialize>(__TAURI_INVOKE("list_saved_queries")),
+	/**  Saves a query as `<name>.sql` for the window's connection. */
+	saveQuery: (name: string, sql: string) => typedError<SavedQuery, CommandError_Serialize>(__TAURI_INVOKE("save_query", { name, sql })),
+	/**  Deletes a saved query of the window's connection. */
+	deleteSavedQuery: (name: string) => typedError<null, CommandError_Serialize>(__TAURI_INVOKE("delete_saved_query", { name })),
+	/**
+	 *  Renders a grid selection in the requested format and puts it on the clipboard.
+	 *  Returns the copied text.
+	 */
+	copySelection: (request: CopyRequest_Deserialize) => typedError<string, CommandError_Serialize>(__TAURI_INVOKE("copy_selection", { request })),
+	/**  Puts text on the clipboard. */
+	writeClipboard: (text: string) => typedError<null, CommandError_Serialize>(__TAURI_INVOKE("write_clipboard", { text })),
 };
 
 /* Types */
+/**  A column of a table or view. */
+export type Column = Column_Serialize | Column_Deserialize;
+
+/**  A column of a table or view. */
+export type Column_Deserialize = {
+	name: string,
+	/**  As shown by `format_type`, for example `character varying(20)`. */
+	typeName: string,
+	/**  `pg_type.typcategory`: `N` numeric, `B` boolean, `D` date/time, `U` user (json...), ... */
+	category: string,
+	notNull: boolean,
+	default?: string | null,
+	comment?: string | null,
+};
+
+/**  A column of a table or view. */
+export type Column_Serialize = {
+	name: string,
+	/**  As shown by `format_type`, for example `character varying(20)`. */
+	typeName: string,
+	/**  `pg_type.typcategory`: `N` numeric, `B` boolean, `D` date/time, `U` user (json...), ... */
+	category: string,
+	notNull: boolean,
+	default: string | null,
+	comment: string | null,
+};
+
 /**  Error returned to the frontend. */
-export type CommandError = { kind: "InvalidInput"; message: string };
+export type CommandError = CommandError_Serialize | CommandError_Deserialize;
+
+/**  Error returned to the frontend. */
+export type CommandError_Deserialize = {
+	kind: ErrorKind,
+	message: string,
+	code?: string | null,
+	detail?: string | null,
+	hint?: string | null,
+	position?: number | null,
+};
+
+/**  Error returned to the frontend. */
+export type CommandError_Serialize = {
+	kind: ErrorKind,
+	message: string,
+	code: string | null,
+	detail: string | null,
+	hint: string | null,
+	position: number | null,
+};
+
+/**  How a condition joins the conditions before it. */
+export type Conjunction = "and" | "or";
+
+/**  A saved connection. The password is stored separately in the credential store. */
+export type ConnectionProfile = ConnectionProfile_Serialize | ConnectionProfile_Deserialize;
+
+/**  A saved connection. The password is stored separately in the credential store. */
+export type ConnectionProfile_Deserialize = {
+	/**  Empty for a profile that has not been saved yet. */
+	id: string,
+	name: string,
+	/**  CSS color such as `#2f8a57`. */
+	color: string,
+	environment: Environment,
+	/**  Launcher group, for example "Work"; empty for none. */
+	group?: string,
+	host: string,
+	port: number,
+	database: string,
+	user: string,
+	ssl?: SslOptions_Deserialize,
+	readOnly?: boolean,
+	/**  Unix time in milliseconds of the last connection. */
+	lastUsedAt?: number | null,
+};
+
+/**  A saved connection. The password is stored separately in the credential store. */
+export type ConnectionProfile_Serialize = {
+	/**  Empty for a profile that has not been saved yet. */
+	id: string,
+	name: string,
+	/**  CSS color such as `#2f8a57`. */
+	color: string,
+	environment: Environment,
+	/**  Launcher group, for example "Work"; empty for none. */
+	group: string,
+	host: string,
+	port: number,
+	database: string,
+	user: string,
+	ssl: SslOptions_Serialize,
+	readOnly: boolean,
+	/**  Unix time in milliseconds of the last connection. */
+	lastUsedAt: number | null,
+};
+
+/**  A table constraint with its definition. */
+export type Constraint = {
+	name: string,
+	/**  `p` primary key, `u` unique, `f` foreign key, `c` check, `x` exclusion. */
+	kind: string,
+	definition: string,
+};
+
+/**  A column of the copied selection. */
+export type CopyColumn = {
+	name: string,
+	/**  Type as shown by `format_type`, for example `bigint` or `character varying(20)`. */
+	typeName: string,
+};
+
+/**  Output format of a copy. */
+export type CopyFormat = 
+/**  Tab-separated values without a header (the plain ⌘C). */
+"tsv" | 
+/**  Tab-separated values with a header row (⌘⇧C). */
+"tsvWithHeader" | "csv" | 
+/**  An array of objects keyed by column name. */
+"json" | "markdown" | 
+/**  One `INSERT` statement per row. */
+"insert" | 
+/**  One `UPDATE ... WHERE <key>` statement per row. */
+"update" | 
+/**  `key IN (...)` for the selected rows. */
+"where";
+
+/**  Everything needed to render a selection in any [`CopyFormat`]. */
+export type CopyRequest = CopyRequest_Serialize | CopyRequest_Deserialize;
+
+/**  Everything needed to render a selection in any [`CopyFormat`]. */
+export type CopyRequest_Deserialize = {
+	format: CopyFormat,
+	columns: CopyColumn[],
+	/**  Selected values; `None` is SQL NULL. */
+	rows: ((string | null)[])[],
+	table?: CopyTable | null,
+	/**  Key values of each selected row, in the order of `table.key_columns`. */
+	keyValues: ((string | null)[])[],
+};
+
+/**  Everything needed to render a selection in any [`CopyFormat`]. */
+export type CopyRequest_Serialize = {
+	format: CopyFormat,
+	columns: CopyColumn[],
+	/**  Selected values; `None` is SQL NULL. */
+	rows: ((string | null)[])[],
+	table: CopyTable | null,
+	/**  Key values of each selected row, in the order of `table.key_columns`. */
+	keyValues: ((string | null)[])[],
+};
+
+/**  Table the rows came from, when known. */
+export type CopyTable = {
+	schema: string,
+	name: string,
+	/**  Primary key (or unique key) columns, used by `Update` and `Where`. */
+	keyColumns: CopyColumn[],
+};
+
+/**
+ *  Environment label of a connection (spec 3.2). Production shows a red band and
+ *  defaults to read-only.
+ */
+export type Environment = "development" | "staging" | "production";
+
+/**  Details of an error reported by the server, shown in the UI. */
+export type ErrorInfo = ErrorInfo_Serialize | ErrorInfo_Deserialize;
+
+/**  Details of an error reported by the server, shown in the UI. */
+export type ErrorInfo_Deserialize = {
+	message: string,
+	/**  SQLSTATE such as `42P01`. */
+	code?: string | null,
+	detail?: string | null,
+	hint?: string | null,
+	/**  1-based character position in the statement. */
+	position?: number | null,
+};
+
+/**  Details of an error reported by the server, shown in the UI. */
+export type ErrorInfo_Serialize = {
+	message: string,
+	/**  SQLSTATE such as `42P01`. */
+	code: string | null,
+	detail: string | null,
+	hint: string | null,
+	/**  1-based character position in the statement. */
+	position: number | null,
+};
+
+/**  Category of a [`CommandError`]. */
+export type ErrorKind = "invalidInput" | 
+/**  Reported by PostgreSQL or the network. */
+"database" | 
+/**  The window has no open connection (never opened, or lost). */
+"notConnected" | 
+/**  Reading or writing app files or the credential store failed. */
+"storage" | 
+/**
+ *  The statements write to a production database; run again with `allow_writes`
+ *  after the user confirms.
+ */
+"confirmationRequired";
+
+/**  What the filter bar sends: structured conditions or a raw `WHERE` expression. */
+export type Filter = { kind: "conditions"; conditions: FilterCondition[] } | { kind: "raw"; sql: string };
+
+/**  One row of the filter bar: `column op value`. */
+export type FilterCondition = {
+	column: string,
+	op: FilterOp,
+	value: string,
+	/**  Ignored on the first condition. */
+	conjunction: Conjunction,
+};
+
+/**  Comparison offered in the filter bar. */
+export type FilterOp = "eq" | "notEq" | "lt" | "gt" | 
+/**  Case-insensitive substring match. */
+"contains" | 
+/**  Case-insensitive prefix match. */
+"startsWith" | 
+/**  `ILIKE` with the pattern as typed (`%` and `_` are wildcards). */
+"iLike" | 
+/**  Comma-separated list of values. */
+"in" | "isNull" | "isNotNull";
+
+/**  A foreign key from this table to another. */
+export type ForeignKey = {
+	name: string,
+	columns: string[],
+	targetSchema: string,
+	targetTable: string,
+	targetColumns: string[],
+};
+
+/**  A function in the schema tree, with its argument types. */
+export type Function = {
+	name: string,
+	arguments: string,
+	/**  `f` function, `p` procedure, `a` aggregate, `w` window. */
+	kind: string,
+};
+
+/**  One executed query in the history (spec 3.7). */
+export type HistoryEntry = {
+	sql: string,
+	/**  Unix time in milliseconds. */
+	executedAt: number | null,
+	elapsedMs: number,
+	/**  Short outcome such as "7 rows", "UPDATE 3" or the error message. */
+	summary: string,
+	ok: boolean,
+};
+
+/**  An index with its definition. */
+export type Index = {
+	name: string,
+	definition: string,
+	primary: boolean,
+	unique: boolean,
+};
+
+/**  What one statement produced. */
+export type Outcome = Outcome_Serialize | Outcome_Deserialize;
+
+/**  What one statement produced. */
+export type Outcome_Deserialize = { kind: "rows"; columns: ResultColumn_Deserialize[]; rows: ((string | null)[])[]; 
+/**  Rows returned by the server, including those beyond [`MAX_RESULT_ROWS`]. */
+total_rows: number | null } | { kind: "command"; 
+/**  The statement's first keyword, for example `UPDATE`. */
+command: string; rows_affected: number | null } | { kind: "error"; error: ErrorInfo_Deserialize };
+
+/**  What one statement produced. */
+export type Outcome_Serialize = { kind: "rows"; columns: ResultColumn_Serialize[]; rows: ((string | null)[])[]; 
+/**  Rows returned by the server, including those beyond [`MAX_RESULT_ROWS`]. */
+total_rows: number | null } | { kind: "command"; 
+/**  The statement's first keyword, for example `UPDATE`. */
+command: string; rows_affected: number | null } | { kind: "error"; error: ErrorInfo_Serialize };
+
+/**  A page of rows. Values are PostgreSQL's text output; `None` is NULL. */
+export type Page = Page_Serialize | Page_Deserialize;
+
+/**  Where the next page starts. */
+export type PageCursor = 
+/**  The first page. */
+{ kind: "start" } | 
+/**  Rows whose key is greater than these values (keyset paging). */
+{ kind: "after"; key: string[] } | 
+/**  Skip this many rows (when the table has no key or a custom sort is used). */
+{ kind: "offset"; offset: number | null };
+
+/**  A request for one page of a table. */
+export type PageRequest = {
+	schema: string,
+	table: string,
+	filter: Filter,
+	sort: SortKey[],
+	/**  Columns that identify a row; used for keyset paging and as a tie-breaker. */
+	keyColumns: string[],
+	cursor: PageCursor,
+};
+
+/**  A page of rows. Values are PostgreSQL's text output; `None` is NULL. */
+export type Page_Deserialize = {
+	columns: string[],
+	rows: ((string | null)[])[],
+	/**  Where the next page starts, or `None` at the end of the table. */
+	next?: PageCursor | null,
+	elapsedMs: number,
+	/**  The query that produced the page, for display. */
+	sql: string,
+};
+
+/**  A page of rows. Values are PostgreSQL's text output; `None` is NULL. */
+export type Page_Serialize = {
+	columns: string[],
+	rows: ((string | null)[])[],
+	/**  Where the next page starts, or `None` at the end of the table. */
+	next: PageCursor | null,
+	elapsedMs: number,
+	/**  The query that produced the page, for display. */
+	sql: string,
+};
+
+/**  Fields read from a connection URL. Missing parts are `None`. */
+export type ParsedUrl = ParsedUrl_Serialize | ParsedUrl_Deserialize;
+
+/**  Fields read from a connection URL. Missing parts are `None`. */
+export type ParsedUrl_Deserialize = {
+	user?: string | null,
+	password?: string | null,
+	host?: string | null,
+	port?: number | null,
+	database?: string | null,
+	/**  The `sslmode` query parameter as written (`require`, `verify-full`, ...). */
+	sslMode?: string | null,
+};
+
+/**  Fields read from a connection URL. Missing parts are `None`. */
+export type ParsedUrl_Serialize = {
+	user: string | null,
+	password: string | null,
+	host: string | null,
+	port: number | null,
+	database: string | null,
+	/**  The `sslmode` query parameter as written (`require`, `verify-full`, ...). */
+	sslMode: string | null,
+};
+
+/**  What to do with the stored password when saving a profile. */
+export type PasswordUpdate = { kind: "keep" } | { kind: "set"; value: string } | { kind: "clear" };
+
+/**  A foreign key from another table to this one. */
+export type Reference = {
+	name: string,
+	sourceSchema: string,
+	sourceTable: string,
+	sourceColumns: string[],
+	/**  Columns of this table that the key points to. */
+	columns: string[],
+};
+
+/**  A table, view or materialized view. */
+export type Relation = Relation_Serialize | Relation_Deserialize;
+
+/**  Kind of a relation shown in the schema tree. */
+export type RelationKind = "table" | "partitionedTable" | "view" | "materializedView" | "foreignTable";
+
+/**  A table, view or materialized view. */
+export type Relation_Deserialize = {
+	name: string,
+	kind: RelationKind,
+	/**  `pg_class.reltuples`; `None` when the table has never been analyzed. */
+	estimatedRows?: number | null,
+};
+
+/**  A table, view or materialized view. */
+export type Relation_Serialize = {
+	name: string,
+	kind: RelationKind,
+	/**  `pg_class.reltuples`; `None` when the table has never been analyzed. */
+	estimatedRows: number | null,
+};
+
+/**  A column of a result set. */
+export type ResultColumn = ResultColumn_Serialize | ResultColumn_Deserialize;
+
+/**  A column of a result set. */
+export type ResultColumn_Deserialize = {
+	name: string,
+	/**  Type name when it could be determined, for example `int8` or `timestamptz`. */
+	typeName?: string | null,
+};
+
+/**  A column of a result set. */
+export type ResultColumn_Serialize = {
+	name: string,
+	/**  Type name when it could be determined, for example `int8` or `timestamptz`. */
+	typeName: string | null,
+};
+
+/**  Which statements of the editor text to run. */
+export type RunMode = 
+/**  The statement under the cursor (a UTF-16 offset, as JavaScript counts). */
+{ kind: "cursor"; position: number } | 
+/**  Every statement in the text. */
+{ kind: "all" };
+
+/**  Results of a run. */
+export type RunResult = RunResult_Serialize | RunResult_Deserialize;
+
+/**  Results of a run. */
+export type RunResult_Deserialize = {
+	results: StatementResult_Deserialize[],
+	/**  Ranges of the statements that were run, in order. */
+	ranges: TextRange[],
+	transaction: TransactionStatus,
+};
+
+/**  Results of a run. */
+export type RunResult_Serialize = {
+	results: StatementResult_Serialize[],
+	/**  Ranges of the statements that were run, in order. */
+	ranges: TextRange[],
+	transaction: TransactionStatus,
+};
+
+/**  A saved query: a `.sql` file in the connection's folder (spec 3.7). */
+export type SavedQuery = {
+	/**  File name without `.sql`. */
+	name: string,
+	sql: string,
+};
+
+/**  One schema with its objects. */
+export type Schema = Schema_Serialize | Schema_Deserialize;
+
+/**  One schema with its objects. */
+export type Schema_Deserialize = {
+	name: string,
+	relations: Relation_Deserialize[],
+	functions: Function[],
+	types: UserType[],
+};
+
+/**  One schema with its objects. */
+export type Schema_Serialize = {
+	name: string,
+	relations: Relation_Serialize[],
+	functions: Function[],
+	types: UserType[],
+};
+
+/**  What a connection window shows about its connection. */
+export type SessionInfo = SessionInfo_Serialize | SessionInfo_Deserialize;
+
+/**  What a connection window shows about its connection. */
+export type SessionInfo_Deserialize = {
+	profile: ConnectionProfile_Deserialize,
+	database: string,
+	serverVersion: string,
+};
+
+/**  What a connection window shows about its connection. */
+export type SessionInfo_Serialize = {
+	profile: ConnectionProfile_Serialize,
+	database: string,
+	serverVersion: string,
+};
+
+/**  One `ORDER BY` key. */
+export type SortKey = {
+	column: string,
+	descending: boolean,
+};
+
+/**  libpq's `sslmode`. */
+export type SslMode = "disable" | "prefer" | "require" | "verify-ca" | "verify-full";
+
+/**  TLS settings of a connection. Paths point to PEM files. */
+export type SslOptions = SslOptions_Serialize | SslOptions_Deserialize;
+
+/**  TLS settings of a connection. Paths point to PEM files. */
+export type SslOptions_Deserialize = {
+	mode: SslMode,
+	/**  CA certificates to trust; the system store is used when unset. */
+	rootCert?: string | null,
+	clientCert?: string | null,
+	clientKey?: string | null,
+};
+
+/**  TLS settings of a connection. Paths point to PEM files. */
+export type SslOptions_Serialize = {
+	mode: SslMode,
+	/**  CA certificates to trust; the system store is used when unset. */
+	rootCert: string | null,
+	clientCert: string | null,
+	clientKey: string | null,
+};
+
+/**  Result of one statement. */
+export type StatementResult = StatementResult_Serialize | StatementResult_Deserialize;
+
+/**  Result of one statement. */
+export type StatementResult_Deserialize = {
+	sql: string,
+	outcome: Outcome_Deserialize,
+	elapsedMs: number,
+};
+
+/**  Result of one statement. */
+export type StatementResult_Serialize = {
+	sql: string,
+	outcome: Outcome_Serialize,
+	elapsedMs: number,
+};
+
+/**  Structure of a relation. */
+export type TableInfo = TableInfo_Serialize | TableInfo_Deserialize;
+
+/**  Structure of a relation. */
+export type TableInfo_Deserialize = {
+	schema: string,
+	name: string,
+	kind: RelationKind,
+	comment?: string | null,
+	estimatedRows?: number | null,
+	columns: Column_Deserialize[],
+	/**
+	 *  Primary key columns, or the columns of a unique index on NOT NULL columns.
+	 *  Empty when rows cannot be identified.
+	 */
+	keyColumns: string[],
+	foreignKeys: ForeignKey[],
+	references: Reference[],
+	indexes: Index[],
+	constraints: Constraint[],
+};
+
+/**  Structure of a relation. */
+export type TableInfo_Serialize = {
+	schema: string,
+	name: string,
+	kind: RelationKind,
+	comment: string | null,
+	estimatedRows: number | null,
+	columns: Column_Serialize[],
+	/**
+	 *  Primary key columns, or the columns of a unique index on NOT NULL columns.
+	 *  Empty when rows cannot be identified.
+	 */
+	keyColumns: string[],
+	foreignKeys: ForeignKey[],
+	references: Reference[],
+	indexes: Index[],
+	constraints: Constraint[],
+};
+
+/**  Result of a connection test. */
+export type TestResult = {
+	serverVersion: string,
+	elapsedMs: number,
+};
+
+/**  A statement's location in the editor text, in UTF-16 offsets. */
+export type TextRange = {
+	from: number,
+	to: number,
+};
+
+/**  Transaction state of a session. */
+export type TransactionStatus = 
+/**  Autocommit: every statement commits on its own. */
+"idle" | 
+/**  Inside `BEGIN`. */
+"inTransaction" | 
+/**  Inside a transaction that failed; only `ROLLBACK` is accepted. */
+"failed";
+
+/**  A user-defined type: enum, domain or composite. */
+export type UserType = {
+	name: string,
+	/**  `e` enum, `d` domain, `c` composite. */
+	kind: string,
+};
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {

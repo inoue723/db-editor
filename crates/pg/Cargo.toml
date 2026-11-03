@@ -8,12 +8,21 @@ license.workspace = true
 publish = false
 
 [dependencies]
+db-editor-core.workspace = true
+serde.workspace = true
+specta.workspace = true
+futures-util = { version = "0.3", default-features = false }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+rustls-native-certs = "0.8"
+rustls-pki-types = { version = "1", features = ["std"] }
 thiserror.workspace = true
 tokio.workspace = true
 tokio-postgres.workspace = true
+tokio-postgres-rustls = "0.14"
 tracing.workspace = true
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["time"] }
 testcontainers-modules.workspace = true
 
 [lints]

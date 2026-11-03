@@ -17,17 +17,25 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 db-editor-core.workspace = true
+db-editor-pg.workspace = true
+keyring = "4"
 serde.workspace = true
 serde_json.workspace = true
 specta.workspace = true
 specta-typescript.workspace = true
 tauri = { version = "2", features = [] }
+tauri-plugin-clipboard-manager = "2"
 tauri-plugin-process = "2"
 tauri-plugin-updater = "2"
 tauri-specta.workspace = true
 thiserror.workspace = true
+tokio = { workspace = true, features = ["sync"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true
+uuid = { version = "1", features = ["v4"] }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+tempfile = "3"
