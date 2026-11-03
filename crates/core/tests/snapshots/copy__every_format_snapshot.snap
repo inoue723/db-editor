@@ -1,0 +1,57 @@
+---
+source: crates/core/tests/copy.rs
+expression: out
+---
+== Tsv
+1	"O'Brien, ""Pat"""	t	"{""lang"": ""ja""}"
+2	"line1
+line2|x"	f	
+
+== TsvWithHeader
+id	name	active	profile
+1	"O'Brien, ""Pat"""	t	"{""lang"": ""ja""}"
+2	"line1
+line2|x"	f	
+
+== Csv
+id,name,active,profile
+1,"O'Brien, ""Pat""",t,"{""lang"": ""ja""}"
+2,"line1
+line2|x",f,
+
+== Json
+[
+  {
+    "id": 1,
+    "name": "O'Brien, \"Pat\"",
+    "active": true,
+    "profile": {
+      "lang": "ja"
+    }
+  },
+  {
+    "id": 2,
+    "name": "line1\nline2|x",
+    "active": false,
+    "profile": null
+  }
+]
+
+== Markdown
+| id | name | active | profile |
+| --- | --- | --- | --- |
+| 1 | O'Brien, "Pat" | t | {"lang": "ja"} |
+| 2 | line1<br>line2\|x | f | NULL |
+
+== Insert
+INSERT INTO "public"."users" ("id", "name", "active", "profile") VALUES (1, 'O''Brien, "Pat"', true, '{"lang": "ja"}');
+INSERT INTO "public"."users" ("id", "name", "active", "profile") VALUES (2, 'line1
+line2|x', false, NULL);
+
+== Update
+UPDATE "public"."users" SET "name" = 'O''Brien, "Pat"', "active" = true, "profile" = '{"lang": "ja"}' WHERE "id" = 1;
+UPDATE "public"."users" SET "name" = 'line1
+line2|x', "active" = false, "profile" = NULL WHERE "id" = 2;
+
+== Where
+"id" IN (1, 2)
