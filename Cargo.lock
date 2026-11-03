@@ -803,7 +803,7 @@ dependencies = [
 
 [[package]]
 name = "db-editor"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "db-editor-core",
  "serde",
@@ -822,7 +822,7 @@ dependencies = [
 
 [[package]]
 name = "db-editor-core"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "insta",
  "proptest",
@@ -831,7 +831,7 @@ dependencies = [
 
 [[package]]
 name = "db-editor-pg"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "testcontainers-modules",
  "thiserror 2.0.21",
