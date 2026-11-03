@@ -1,0 +1,20 @@
+[package]
+name = "db-editor-pg"
+description = "PostgreSQL access layer built on tokio-postgres."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+thiserror.workspace = true
+tokio.workspace = true
+tokio-postgres.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+testcontainers-modules.workspace = true
+
+[lints]
+workspace = true

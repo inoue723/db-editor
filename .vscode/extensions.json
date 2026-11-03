@@ -1,0 +1,9 @@
+{
+  "recommendations": [
+    "rust-lang.rust-analyzer",
+    "oxc.oxc-vscode",
+    "tauri-apps.tauri-vscode",
+    "tamasfe.even-better-toml",
+    "editorconfig.editorconfig"
+  ]
+}

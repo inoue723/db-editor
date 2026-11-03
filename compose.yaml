@@ -1,0 +1,11 @@
+# Local PostgreSQL for manual testing: `docker compose up -d`
+# Connect with postgres://postgres:postgres@localhost:54320/postgres
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "54320:5432"
+    volumes:
+      - ./dev/seed:/docker-entrypoint-initdb.d:ro
