@@ -6,20 +6,32 @@ interface ModalProps {
   children: ReactNode;
   footer: ReactNode;
   header?: ReactNode;
+  /** Whether Escape closes the dialog (off while a field records key presses). */
+  escape?: boolean;
+  /** A wider dialog, for tables and SQL. */
+  wide?: boolean;
 }
 
 /** A dialog over the window. Escape and a click outside close it. */
-export function Modal({ title, onClose, children, footer, header }: ModalProps) {
+export function Modal({
+  title,
+  onClose,
+  children,
+  footer,
+  header,
+  escape = true,
+  wide = false,
+}: ModalProps) {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && escape) {
         e.stopPropagation();
         onClose();
       }
     }
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [onClose]);
+  }, [onClose, escape]);
 
   return (
     <div
@@ -31,7 +43,7 @@ export function Modal({ title, onClose, children, footer, header }: ModalProps) 
         }
       }}
     >
-      <dialog open className="modal" aria-modal="true" aria-label={title}>
+      <dialog open className={wide ? "modal wide" : "modal"} aria-modal="true" aria-label={title}>
         <header>
           <h2>{title}</h2>
           {header}

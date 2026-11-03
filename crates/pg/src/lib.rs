@@ -2,6 +2,7 @@
 
 pub mod browse;
 pub mod catalog;
+pub mod edit;
 pub mod exec;
 pub mod tls;
 
@@ -99,6 +100,11 @@ impl Session {
     #[must_use]
     pub fn client(&self) -> &Client {
         &self.client
+    }
+
+    /// The underlying client, for transactions.
+    pub fn client_mut(&mut self) -> &mut Client {
+        &mut self.client
     }
 
     /// Asks the server to cancel the query running on this session.

@@ -9,9 +9,17 @@ import {
   type TableInfo_Serialize,
   type TransactionStatus,
 } from "../bindings";
+import { CommandPalette, type GotoItem } from "../commands/CommandPalette";
+import {
+  useCommandApi,
+  useCommandContext,
+  useCommands,
+  useKeyLabel,
+} from "../commands/CommandProvider";
+import { KeybindingsEditor } from "../commands/KeybindingsEditor";
+import type { WhenContext } from "../commands/when";
 import { ApiError, call, errorMessage } from "../lib/api";
 import { ENV_LABEL } from "../lib/env";
-import { isMod, keyLabel } from "../lib/keys";
 import { SqlTab, type SqlTabState } from "../sql/SqlTab";
 import { type TableTabState, TableView } from "../table/TableView";
 import { Confirm } from "../ui/Modal";
@@ -68,7 +76,17 @@ export function ConnectionWindow() {
   const [columnsCache, setColumnsCache] = useState<Record<string, string[]>>({});
   const [confirmSwitch, setConfirmSwitch] = useState<string | null>(null);
   const [deleteSaved, setDeleteSaved] = useState<SavedQuery | null>(null);
+  const [dirtyTabs, setDirtyTabs] = useState<Record<string, number>>({});
+  const [confirmClose, setConfirmClose] = useState<{ id: string; count: number } | null>(null);
+  const [palette, setPalette] = useState<{
+    mode: "commands" | "goto";
+    context: WhenContext;
+    focus: Element | null;
+  } | null>(null);
+  const [keybindingsOpen, setKeybindingsOpen] = useState(false);
   const treeFilter = useRef<HTMLInputElement>(null);
+  const commandApi = useCommandApi();
+  const keyLabel = useKeyLabel();
 
   const active = tabs.find((t) => t.id === activeId) ?? null;
 
@@ -177,12 +195,36 @@ export function ConnectionWindow() {
     setActiveId(tab.id);
   }, []);
 
-  const closeTab = useCallback((id: string) => {
+  const dirtyRef = useRef(dirtyTabs);
+  useLayoutEffect(() => {
+    dirtyRef.current = dirtyTabs;
+  }, [dirtyTabs]);
+
+  const forceCloseTab = useCallback((id: string) => {
     const ts = tabsRef.current;
     const i = ts.findIndex((t) => t.id === id);
     const rest = ts.filter((t) => t.id !== id);
     setTabs((current) => current.filter((t) => t.id !== id));
     setActiveId((current) => (current === id ? (rest[Math.max(0, i - 1)]?.id ?? null) : current));
+    setDirtyTabs((d) => Object.fromEntries(Object.entries(d).filter(([k]) => k !== id)));
+  }, []);
+
+  /** Closes a tab, asking first when it has unsaved changes. */
+  const closeTab = useCallback(
+    (id: string) => {
+      const count = dirtyRef.current[id] ?? 0;
+      if (count > 0) {
+        setActiveId(id);
+        setConfirmClose({ id, count });
+        return;
+      }
+      forceCloseTab(id);
+    },
+    [forceCloseTab],
+  );
+
+  const onDirty = useCallback((id: string, count: number) => {
+    setDirtyTabs((d) => (d[id] === count || (!d[id] && count === 0) ? d : { ...d, [id]: count }));
   }, []);
 
   const patchTable = useCallback((id: string, patch: Partial<TableTabState>) => {
@@ -246,7 +288,10 @@ export function ConnectionWindow() {
     }
   }
 
+  const anyDirty = Object.values(dirtyTabs).some((n) => n > 0);
+
   async function switchDatabase(name: string) {
+    setDirtyTabs({});
     setConfirmSwitch(null);
     setTabs([]);
     setActiveId(null);
@@ -254,72 +299,92 @@ export function ConnectionWindow() {
     await connect(name);
   }
 
-  // Window-level shortcuts (spec 5.2). Grid and editor keys are handled where the focus is.
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (!isMod(e) || !info) {
-        return;
-      }
-      const tab = tabs.find((t) => t.id === activeId);
-      const key = e.code;
-      const handled = (() => {
-        if (key === "KeyT" && !e.altKey && !e.shiftKey) {
-          openSql();
-          return true;
+  useCommandContext({
+    tab: active?.kind ?? "none",
+    readOnly: info?.profile.readOnly ?? true,
+  });
+
+  const openPalette = useCallback(
+    (mode: "commands" | "goto") => {
+      setPalette({ mode, context: commandApi.context(), focus: document.activeElement });
+    },
+    [commandApi],
+  );
+
+  // Window-level commands (spec 5.2). Grid, table and editor commands are handled
+  // by the components that own them.
+  const tableTabActive = active?.kind === "table" ? active : null;
+  useCommands(
+    {
+      "app.commandPalette": () => openPalette("commands"),
+      "app.openQuickly": () => openPalette("goto"),
+      "app.openKeybindings": () => setKeybindingsOpen(true),
+      "app.newTab": () => openSql(),
+      "app.closeTab": () => {
+        if (activeId) {
+          closeTab(activeId);
         }
-        if (key === "KeyW" && !e.altKey && !e.shiftKey) {
-          if (activeId) {
-            closeTab(activeId);
-          }
-          return true;
+      },
+      ...Object.fromEntries(
+        Array.from({ length: 9 }, (_, i) => [
+          `app.selectTab${i + 1}`,
+          () => {
+            const target = i === 8 ? tabs[tabs.length - 1] : tabs[i];
+            if (target) {
+              setActiveId(target.id);
+            }
+          },
+        ]),
+      ),
+      "app.toggleLeft": () => setLeftOpen((v) => !v),
+      "app.toggleRight": () => setRightOpen((v) => !v),
+      "app.reload": () => {
+        if (tableTabActive) {
+          patchTable(tableTabActive.id, { reload: tableTabActive.reload + 1 });
+        } else {
+          void loadSchemas();
         }
-        if (/^Digit[1-9]$/.test(key) && !e.altKey && !e.shiftKey) {
-          const i = Number(key.slice(5)) - 1;
-          const target = i === 8 ? tabs[tabs.length - 1] : tabs[i];
-          if (target) {
-            setActiveId(target.id);
-          }
-          return true;
-        }
-        if (key === "Digit0" && !e.shiftKey) {
-          if (e.altKey) {
-            setRightOpen((v) => !v);
-          } else {
-            setLeftOpen((v) => !v);
-          }
-          return true;
-        }
-        if (key === "KeyR" && !e.altKey && !e.shiftKey) {
-          if (tab?.kind === "table") {
-            patchTable(tab.id, { reload: tab.reload + 1 });
-          } else {
-            void loadSchemas();
-          }
-          return true;
-        }
-        if (key === "KeyT" && e.altKey && tab?.kind === "table") {
-          patchTable(tab.id, { view: tab.view === "content" ? "structure" : "content" });
-          return true;
-        }
-        if (key === "KeyF" && e.altKey && !e.shiftKey && tab?.kind === "table") {
-          patchTable(tab.id, { filterOpen: !tab.filterOpen, view: "content" });
-          return true;
-        }
-        if (key === "KeyF" && e.shiftKey && !e.altKey) {
-          setLeftOpen(true);
-          setTimeout(() => treeFilter.current?.focus(), 0);
-          return true;
-        }
-        return false;
-      })();
-      if (handled) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
-    }
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [info, tabs, activeId, openSql, closeTab, patchTable, loadSchemas]);
+      },
+      "app.filterTree": () => {
+        setLeftOpen(true);
+        setTimeout(() => treeFilter.current?.focus(), 0);
+      },
+      "table.toggleView": tableTabActive
+        ? () =>
+            patchTable(tableTabActive.id, {
+              view: tableTabActive.view === "content" ? "structure" : "content",
+            })
+        : null,
+      "table.toggleFilter": tableTabActive
+        ? () =>
+            patchTable(tableTabActive.id, {
+              filterOpen: !tableTabActive.filterOpen,
+              view: "content",
+            })
+        : null,
+    },
+    info !== null,
+  );
+
+  const gotoItems: GotoItem[] = useMemo(
+    () => [
+      ...(schemas ?? []).flatMap((sc) =>
+        sc.relations.map((r) => ({
+          id: `t:${sc.name}.${r.name}`,
+          title: r.name,
+          detail: `${sc.name} · ${r.kind === "table" || r.kind === "partitionedTable" ? "テーブル" : "ビュー"}`,
+          run: () => openTable(sc.name, r.name, null),
+        })),
+      ),
+      ...saved.map((q) => ({
+        id: `q:${q.name}`,
+        title: q.name,
+        detail: "保存済みクエリ",
+        run: () => openSql(q.sql, q.name),
+      })),
+    ],
+    [schemas, saved, openTable, openSql],
+  );
 
   if (!info) {
     if (connecting || !connectError) {
@@ -422,6 +487,11 @@ export function ConnectionWindow() {
               >
                 <span className="tic">{t.kind === "sql" ? "SQL" : "T"}</span>
                 <span className="tt">{t.kind === "sql" ? t.title : t.table}</span>
+                {(dirtyTabs[t.id] ?? 0) > 0 && (
+                  <span className="tdirty" title="未保存の変更があります">
+                    ●
+                  </span>
+                )}
                 <button
                   type="button"
                   className="x"
@@ -439,7 +509,7 @@ export function ConnectionWindow() {
               type="button"
               className="add"
               onClick={() => openSql()}
-              title={`新しいSQLタブ ${keyLabel("⌘T")}`}
+              title={`新しいSQLタブ ${keyLabel("app.newTab")}`}
               aria-label="新しいSQLタブ"
             >
               +
@@ -448,25 +518,34 @@ export function ConnectionWindow() {
             <button
               type="button"
               className="ibtn"
+              onClick={() => openPalette("commands")}
+              title="すべての操作を検索して実行"
+            >
+              コマンド <span className="kbd">{keyLabel("app.commandPalette")}</span>
+            </button>
+            <button
+              type="button"
+              className="ibtn"
               aria-pressed={leftOpen}
               onClick={() => setLeftOpen((v) => !v)}
-              title={`左パネル ${keyLabel("⌘0")}`}
+              title={`左パネル ${keyLabel("app.toggleLeft")}`}
             >
-              左 <span className="kbd">{keyLabel("⌘0")}</span>
+              左 <span className="kbd">{keyLabel("app.toggleLeft")}</span>
             </button>
             <button
               type="button"
               className="ibtn"
               aria-pressed={rightOpen}
               onClick={() => setRightOpen((v) => !v)}
-              title={`右パネル ${keyLabel("⌥⌘0")}`}
+              title={`右パネル ${keyLabel("app.toggleRight")}`}
             >
-              右 <span className="kbd">{keyLabel("⌥⌘0")}</span>
+              右 <span className="kbd">{keyLabel("app.toggleRight")}</span>
             </button>
           </div>
           {tabs.length === 0 && (
             <div className="empty">
-              左のツリーからテーブルを開くか、+ ({keyLabel("⌘T")}) でSQLタブを作ります。
+              左のツリーからテーブルを開くか、+ ({keyLabel("app.newTab")}) でSQLタブを作ります。
+              {keyLabel("app.commandPalette")} ですべての操作を検索できます。
             </div>
           )}
           {tabs.map((t) => (
@@ -481,6 +560,9 @@ export function ConnectionWindow() {
                   tab={t}
                   active={t.id === activeId}
                   rightOpen={rightOpen}
+                  readOnly={profile.readOnly}
+                  production={prod}
+                  onDirty={(count) => onDirty(t.id, count)}
                   onChange={(patch) => patchTable(t.id, patch)}
                   onOpenTable={openTable}
                   onStatus={setStatusText}
@@ -545,12 +627,45 @@ export function ConnectionWindow() {
       {confirmSwitch && (
         <Confirm
           title="データベースを切り替え"
-          message={`「${confirmSwitch}」に切り替えます。開いているタブはすべて閉じます。`}
+          message={`「${confirmSwitch}」に切り替えます。開いているタブはすべて閉じます。${anyDirty ? "未保存の変更は破棄されます。" : ""}`}
           confirmLabel="切り替える"
           onConfirm={() => void switchDatabase(confirmSwitch)}
           onCancel={() => setConfirmSwitch(null)}
         />
       )}
+      {confirmClose && (
+        <Confirm
+          title="未保存の変更があります"
+          message={`このタブには保存していない変更が${confirmClose.count}行あります。閉じると破棄されます。`}
+          confirmLabel="破棄して閉じる"
+          danger
+          onCancel={() => setConfirmClose(null)}
+          onConfirm={() => {
+            const id = confirmClose.id;
+            setConfirmClose(null);
+            forceCloseTab(id);
+          }}
+        />
+      )}
+      {palette && (
+        <CommandPalette
+          mode={palette.mode}
+          goto={gotoItems}
+          context={palette.context}
+          onClose={() => {
+            const el = palette.focus;
+            setPalette(null);
+            if (el instanceof HTMLElement) {
+              el.focus();
+            }
+          }}
+          onRun={(id) => {
+            // After the palette is gone and the focus is back where it was.
+            setTimeout(() => commandApi.run(id), 0);
+          }}
+        />
+      )}
+      {keybindingsOpen && <KeybindingsEditor onClose={() => setKeybindingsOpen(false)} />}
       {deleteSaved && (
         <Confirm
           title="保存済みクエリを削除"

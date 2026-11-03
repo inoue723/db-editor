@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
-import { commands, type ForeignKey, type Reference, type TableInfo_Serialize } from "../bindings";
-import { call } from "../lib/api";
+import {
+  type CellValue,
+  commands,
+  type ForeignKey,
+  type Reference,
+  type TableInfo_Serialize,
+} from "../bindings";
+import { useKeyLabel } from "../commands/CommandProvider";
 import type { GridRow } from "../grid/types";
+import { call } from "../lib/api";
+import type { CellStatus } from "./edits";
 
 /** Counts above this are shown as "1000+" so a big table is never scanned in full. */
 const COUNT_LIMIT = 1000;
@@ -11,6 +19,14 @@ interface Props {
   /** Column names of the loaded rows, in order. */
   columns: string[];
   row: GridRow | null;
+  /** The row was added and is not saved yet (it has no references). */
+  isNew?: boolean;
+  /** Editing of the row's values, when the table can be edited. */
+  edit?: {
+    canEdit: (column: string) => boolean;
+    status: (column: string) => CellStatus;
+    commit: (column: string, value: CellValue) => void;
+  } | null;
   onOpenForeignKey: (fk: ForeignKey, row: GridRow) => void;
   onOpenReference: (ref: Reference, row: GridRow) => void;
 }
@@ -31,7 +47,70 @@ function valuesOf(row: GridRow, columns: string[], names: string[]): (string | n
 }
 
 /** The right sidebar of a table tab: every value of the selected row and the rows that reference it. */
-export function RowDetail({ info, columns, row, onOpenForeignKey, onOpenReference }: Props) {
+/** A value field that edits in place: a text area committed on blur (spec 3.5). */
+function EditableValue({
+  value,
+  typeName,
+  status,
+  label,
+  onCommit,
+}: {
+  value: string | null;
+  typeName: string;
+  status: CellStatus;
+  label: string;
+  onCommit: (value: CellValue) => void;
+}) {
+  const shown = value === null ? "" : pretty(value, typeName);
+  const [draft, setDraft] = useState<string | null>(null);
+  const cls = ["v", "edit", status === "edited" ? "ed" : "", status === "default" ? "dflt" : ""]
+    .filter(Boolean)
+    .join(" ");
+  return (
+    <div className="vedit">
+      <textarea
+        className={cls}
+        aria-label={label}
+        value={draft ?? shown}
+        placeholder={status === "default" ? "DEFAULT" : value === null ? "NULL" : ""}
+        rows={Math.min(10, Math.max(1, shown.split("\n").length))}
+        onChange={(e) => setDraft(e.currentTarget.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            setDraft(null);
+            e.currentTarget.blur();
+          }
+        }}
+        onBlur={() => {
+          if (draft !== null && draft !== shown) {
+            onCommit({ kind: "value", text: draft });
+          }
+          setDraft(null);
+        }}
+      />
+      <button
+        type="button"
+        className="mini"
+        title="NULLを設定"
+        disabled={value === null && status !== "default"}
+        onClick={() => onCommit({ kind: "null" })}
+      >
+        NULL
+      </button>
+    </div>
+  );
+}
+
+export function RowDetail({
+  info,
+  columns,
+  row,
+  isNew,
+  edit,
+  onOpenForeignKey,
+  onOpenReference,
+}: Props) {
+  const keyLabel = useKeyLabel();
   // Counts belong to the row they were fetched for, so a new row starts empty.
   const [fetched, setFetched] = useState<{
     row: GridRow | null;
@@ -43,7 +122,7 @@ export function RowDetail({ info, columns, row, onOpenForeignKey, onOpenReferenc
   const counts = fetched.row === row ? fetched.counts : {};
 
   useEffect(() => {
-    if (!row || info.references.length === 0) {
+    if (!row || isNew || info.references.length === 0) {
       return undefined;
     }
     let cancelled = false;
@@ -74,7 +153,7 @@ export function RowDetail({ info, columns, row, onOpenForeignKey, onOpenReferenc
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [row, info, columns]);
+  }, [row, isNew, info, columns]);
 
   if (!row) {
     return (
@@ -94,7 +173,7 @@ export function RowDetail({ info, columns, row, onOpenForeignKey, onOpenReferenc
   return (
     <aside className="right" aria-label="行の詳細">
       <div className="rh">
-        行の詳細 <span className="kbd">{keyText || info.name}</span>
+        行の詳細 <span className="kbd">{isNew ? "新しい行(未保存)" : keyText || info.name}</span>
       </div>
       <div className="rb">
         {info.columns.map((c) => {
@@ -113,13 +192,25 @@ export function RowDetail({ info, columns, row, onOpenForeignKey, onOpenReferenc
                   </button>
                 )}
               </div>
-              <div className={v === null ? "v nul" : "v"}>
-                {v === null ? "NULL" : pretty(v, c.typeName)}
-              </div>
+              {edit?.canEdit(c.name) ? (
+                <EditableValue
+                  // A new row, or a new value from the grid, resets the draft.
+                  key={`${keyText}|${v ?? "\u0000"}`}
+                  value={v}
+                  typeName={c.typeName}
+                  status={edit.status(c.name)}
+                  label={c.name}
+                  onCommit={(value) => edit.commit(c.name, value)}
+                />
+              ) : (
+                <div className={v === null ? "v nul" : "v"}>
+                  {v === null ? "NULL" : pretty(v, c.typeName)}
+                </div>
+              )}
             </div>
           );
         })}
-        {info.references.length > 0 && (
+        {info.references.length > 0 && !isNew && (
           <div className="refs">
             <h5>この行を参照している行</h5>
             {info.references.map((ref) => {
@@ -148,7 +239,12 @@ export function RowDetail({ info, columns, row, onOpenForeignKey, onOpenReferenc
             })}
           </div>
         )}
-        <div className="ro">v0.1 は閲覧のみです。セルの編集は v0.2 で入ります。</div>
+        {edit && (
+          <div className="ro">
+            値を書き換えると、フォーカスを外したときに未保存の変更になります。保存は{" "}
+            {keyLabel("table.save")}。
+          </div>
+        )}
       </div>
     </aside>
   );

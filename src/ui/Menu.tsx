@@ -8,6 +8,8 @@ export type MenuItem =
       onSelect?: () => void;
       /** Shortcut written the macOS way, for example `⌘C`. */
       shortcut?: string;
+      /** Shortcut already formatted for the platform (from the key bindings). */
+      keyText?: string;
       disabled?: boolean;
       /** Shown instead of the shortcut, for example the version that adds the feature. */
       tag?: string;
@@ -98,6 +100,8 @@ export function Menu({ x, y, items, onClose }: MenuProps) {
             {item.label}
             {item.tag ? (
               <span className="tag">{item.tag}</span>
+            ) : item.keyText ? (
+              <span className="kbd">{item.keyText}</span>
             ) : (
               item.shortcut && <span className="kbd">{keyLabel(item.shortcut)}</span>
             )}

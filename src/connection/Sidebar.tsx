@@ -1,6 +1,6 @@
 import { type CSSProperties, forwardRef, useMemo, useState } from "react";
 import type { RelationKind, SavedQuery, Schema_Serialize } from "../bindings";
-import { keyLabel } from "../lib/keys";
+import { useKeyLabel } from "../commands/CommandProvider";
 import { Menu, type MenuItem } from "../ui/Menu";
 
 interface Group {
@@ -93,6 +93,7 @@ export const Sidebar = forwardRef<HTMLInputElement, Props>(function Sidebar(
   },
   filterRef,
 ) {
+  const keyLabel = useKeyLabel();
   const [filter, setFilter] = useState("");
   const [open, setOpen] = useState<Record<string, boolean>>({
     public: true,
@@ -160,7 +161,7 @@ export const Sidebar = forwardRef<HTMLInputElement, Props>(function Sidebar(
           ref={filterRef}
           type="search"
           aria-label="スキーマを絞り込み"
-          placeholder={`絞り込み ${keyLabel("⇧⌘F")}`}
+          placeholder={`絞り込み ${keyLabel("app.filterTree")}`}
           value={filter}
           onChange={(e) => setFilter(e.currentTarget.value)}
           onKeyDown={(e) => {

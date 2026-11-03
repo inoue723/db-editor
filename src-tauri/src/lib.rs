@@ -8,7 +8,7 @@ use tauri::Manager;
 use tauri_specta::{Builder, collect_commands};
 
 use crate::state::AppState;
-use crate::store::{History, KeyringSecrets, Profiles, SavedQueries};
+use crate::store::{History, Keybindings, KeyringSecrets, Profiles, SavedQueries};
 
 /// Path of the generated TypeScript bindings, relative to `src-tauri/`.
 pub const BINDINGS_PATH: &str = "../src/bindings.ts";
@@ -38,8 +38,13 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
         commands::list_saved_queries,
         commands::save_query,
         commands::delete_saved_query,
+        commands::preview_changes,
+        commands::save_changes,
         commands::copy_selection,
         commands::write_clipboard,
+        commands::read_clipboard,
+        commands::load_keybindings,
+        commands::save_keybindings,
     ])
 }
 
@@ -85,6 +90,7 @@ pub fn run() {
                 Profiles::new(&config_dir),
                 History::new(&data_dir),
                 SavedQueries::new(&config_dir),
+                Keybindings::new(&config_dir),
                 Box::new(KeyringSecrets),
             ));
             Ok(())

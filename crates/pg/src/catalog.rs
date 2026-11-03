@@ -216,6 +216,12 @@ pub struct Column {
     pub not_null: bool,
     pub default: Option<String>,
     pub comment: Option<String>,
+    /// An identity column (`GENERATED ... AS IDENTITY`).
+    pub identity: bool,
+    /// A generated column (`GENERATED ALWAYS AS (...) STORED`), which cannot be written.
+    pub generated: bool,
+    /// Labels of an enum type, in order; empty for other types.
+    pub enum_values: Vec<String>,
 }
 
 /// A foreign key from this table to another.
@@ -311,7 +317,10 @@ pub async fn table_info(client: &Client, schema: &str, name: &str) -> Result<Tab
     let columns = client
         .query(
             "SELECT a.attname, format_type(a.atttypid, a.atttypmod), t.typcategory::text, a.attnotnull, \
-                    pg_get_expr(d.adbin, d.adrelid), col_description(a.attrelid, a.attnum) \
+                    pg_get_expr(d.adbin, d.adrelid), col_description(a.attrelid, a.attnum), \
+                    a.attidentity <> '', a.attgenerated <> '', \
+                    ARRAY(SELECT e.enumlabel::text FROM pg_enum e WHERE e.enumtypid = a.atttypid \
+                          ORDER BY e.enumsortorder) \
              FROM pg_attribute a \
              JOIN pg_type t ON t.oid = a.atttypid \
              LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum \
@@ -328,6 +337,9 @@ pub async fn table_info(client: &Client, schema: &str, name: &str) -> Result<Tab
                 not_null: r.try_get(3)?,
                 default: r.try_get(4)?,
                 comment: r.try_get(5)?,
+                identity: r.try_get(6)?,
+                generated: r.try_get(7)?,
+                enum_values: r.try_get(8)?,
             })
         })
         .collect::<Result<Vec<_>, Error>>()?;

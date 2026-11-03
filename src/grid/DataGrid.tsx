@@ -11,6 +11,7 @@ import {
   useState,
 } from "react";
 import { commands, type CopyFormat, type CopyTable, type SortKey } from "../bindings";
+import { useCommands, useKeyLabel } from "../commands/CommandProvider";
 import { call, errorMessage } from "../lib/api";
 import { isMod } from "../lib/keys";
 import { Menu, type MenuItem } from "../ui/Menu";
@@ -45,6 +46,25 @@ export interface GridHandle {
   focus: () => void;
   /** Jumps through the foreign key of the active cell, if any. */
   followForeignKey: () => void;
+  /** Replaces the selection and scrolls to it. */
+  select: (selection: Selection | null) => void;
+}
+
+/** Cell editing, when the grid shows an editable table (spec 3.5). */
+export interface GridEditing {
+  canEdit: (row: number, col: number) => boolean;
+  /** Values offered while typing (enum labels, true / false). */
+  suggestions: (col: number) => readonly string[];
+  /** Stores a typed value. */
+  commit: (row: number, col: number, text: string) => void;
+}
+
+interface CellEditor {
+  row: number;
+  col: number;
+  text: string;
+  /** The user changed the text (committing an untouched NULL keeps it NULL). */
+  dirty: boolean;
 }
 
 interface Props {
@@ -64,6 +84,17 @@ interface Props {
   resetKey?: unknown;
   emptyText?: string;
   label: string;
+  /** The grid's tab is shown: it handles grid commands (copy, select all, ...). */
+  active?: boolean;
+  editing?: GridEditing | null;
+  /** Extra class of a row: `ins` (added) or `del` (to be deleted). */
+  rowClass?: (row: number) => string | undefined;
+  /** Extra class of a cell: `ed` (edited), `dflt` (DEFAULT), `bad` (invalid). */
+  cellClass?: (row: number, col: number) => string | undefined;
+  /** Tooltip of a cell, for example why its value is invalid. */
+  cellTitle?: (row: number, col: number) => string | undefined;
+  /** Menu items for editing, added to the context menu. */
+  editMenu?: MenuItem[];
 }
 
 function columnWidth(col: GridColumn, rows: GridRow[], index: number): number {
@@ -94,10 +125,25 @@ export const DataGrid = forwardRef<GridHandle, Props>(function DataGrid(
     resetKey,
     emptyText,
     label,
+    active = true,
+    editing,
+    rowClass,
+    cellClass,
+    cellTitle,
+    editMenu,
   },
   ref,
 ) {
   const toast = useToast();
+  const keyLabel = useKeyLabel();
+  const [editor, setEditorState] = useState<CellEditor | null>(null);
+  // Mirrors `editor` synchronously: moving the focus after Enter blurs the field,
+  // and that blur must not commit the same edit a second time.
+  const editorRef = useRef<CellEditor | null>(null);
+  const setEditor = useCallback((next: CellEditor | null) => {
+    editorRef.current = next;
+    setEditorState(next);
+  }, []);
   const wrap = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [height, setHeight] = useState(600);
@@ -114,7 +160,8 @@ export const DataGrid = forwardRef<GridHandle, Props>(function DataGrid(
 
   useEffect(() => {
     setSelection(null);
-  }, [resetKey]);
+    setEditor(null);
+  }, [resetKey, setEditor]);
 
   useEffect(() => {
     onActiveRowChange?.(activeRow(selection), selection);
@@ -170,9 +217,76 @@ export const DataGrid = forwardRef<GridHandle, Props>(function DataGrid(
     }
   }, [fkCell, rows, onForeignKey]);
 
-  useImperativeHandle(ref, () => ({ focus: () => wrap.current?.focus(), followForeignKey }), [
-    followForeignKey,
-  ]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      focus: () => wrap.current?.focus(),
+      followForeignKey,
+      select: (sel) => {
+        setSelection(sel);
+        if (sel) {
+          scrollToRow(sel.mode === "cells" ? sel.focus.row : sel.anchor);
+        }
+      },
+    }),
+    [followForeignKey, scrollToRow],
+  );
+
+  function startEdit(row: number, col: number, typed?: string) {
+    if (!editing?.canEdit(row, col)) {
+      return false;
+    }
+    setSelection(cellSelection(row, col));
+    setEditor({
+      row,
+      col,
+      text: typed ?? rows[row]?.[col] ?? "",
+      dirty: typed !== undefined,
+    });
+    return true;
+  }
+
+  /** Stores the editor's text (if changed) and closes it. */
+  function commitEdit() {
+    const ed = editorRef.current;
+    if (!ed) {
+      return;
+    }
+    setEditor(null);
+    if (ed.dirty && ed.text !== (rows[ed.row]?.[ed.col] ?? null)) {
+      editing?.commit(ed.row, ed.col, ed.text);
+    }
+  }
+
+  function moveAfterEdit(dRow: number, dCol: number) {
+    const next = moveSelection(selection, dRow, dCol, false, rows.length, columns.length);
+    setSelection(next);
+    if (next?.mode === "cells") {
+      scrollToRow(next.focus.row);
+    }
+    wrap.current?.focus();
+  }
+
+  function onEditorKeyDown(e: KeyboardEvent<HTMLTextAreaElement | HTMLInputElement>) {
+    // Arrow keys and typing belong to the text field, not the grid.
+    e.stopPropagation();
+    if (e.nativeEvent.isComposing) {
+      return;
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      setEditor(null);
+      wrap.current?.focus();
+    } else if (e.key === "Enter" && !e.altKey && !e.shiftKey) {
+      e.preventDefault();
+      commitEdit();
+      moveAfterEdit(1, 0);
+    } else if (e.key === "Tab") {
+      e.preventDefault();
+      commitEdit();
+      moveAfterEdit(0, e.shiftKey ? -1 : 1);
+    }
+  }
 
   const keyIndexes = useMemo(
     () => (copyTable?.keyColumns ?? []).map((k) => columns.findIndex((c) => c.name === k.name)),
@@ -223,11 +337,6 @@ export const DataGrid = forwardRef<GridHandle, Props>(function DataGrid(
       ArrowLeft: [0, -1],
       ArrowRight: [0, 1],
     };
-    if (mod && e.key === "ArrowDown" && fkCell()) {
-      e.preventDefault();
-      followForeignKey();
-      return;
-    }
     const move = moves[e.key];
     if (move && !mod) {
       e.preventDefault();
@@ -256,30 +365,54 @@ export const DataGrid = forwardRef<GridHandle, Props>(function DataGrid(
       }
       return;
     }
-    if (mod && e.code === "KeyA") {
-      e.preventDefault();
-      if (rows.length) {
-        setSelection({ mode: "rows", rows: rows.map((_, i) => i), anchor: 0 });
-      }
-      return;
-    }
-    if (mod && e.code === "KeyC") {
-      e.preventDefault();
-      if (e.altKey) {
-        const rect = wrap.current?.getBoundingClientRect();
-        setMenu({ x: (rect?.left ?? 0) + 80, y: (rect?.top ?? 0) + 60, formatsOnly: true });
-      } else {
-        void copy(e.shiftKey ? "tsvWithHeader" : "tsv");
-      }
-      return;
-    }
     if (e.key === "Escape" && selection) {
       setSelection(null);
+      return;
+    }
+    const cell = selection?.mode === "cells" ? selection.focus : null;
+    if (!cell || mod || e.ctrlKey || e.metaKey || e.nativeEvent.isComposing) {
+      return;
+    }
+    // Return or F2 edits the cell; typing replaces it (spec 3.5).
+    if (e.key === "Enter" || e.key === "F2") {
+      if (startEdit(cell.row, cell.col)) {
+        e.preventDefault();
+      }
+    } else if (e.key === "Backspace" || e.key === "Delete") {
+      if (!e.altKey && startEdit(cell.row, cell.col, "")) {
+        e.preventDefault();
+      }
+    } else if (e.key.length === 1 && !e.altKey) {
+      if (startEdit(cell.row, cell.col, e.key)) {
+        e.preventDefault();
+      }
     }
   }
 
+  function selectAll() {
+    if (rows.length) {
+      setSelection({ mode: "rows", rows: rows.map((_, i) => i), anchor: 0 });
+    }
+  }
+
+  function openFormatMenu() {
+    const rect = wrap.current?.getBoundingClientRect();
+    setMenu({ x: (rect?.left ?? 0) + 80, y: (rect?.top ?? 0) + 60, formatsOnly: true });
+  }
+
+  useCommands(
+    {
+      "grid.copy": () => void copy("tsv"),
+      "grid.copyWithHeader": () => void copy("tsvWithHeader"),
+      "grid.copyAs": openFormatMenu,
+      "grid.selectAll": selectAll,
+      "grid.followForeignKey": fkCell() && onForeignKey ? followForeignKey : null,
+    },
+    active,
+  );
+
   function onCellMouseDown(e: MouseEvent, row: number, col: number) {
-    if (e.button !== 0) {
+    if (e.button !== 0 || (editor?.row === row && editor.col === col)) {
       return;
     }
     if (e.shiftKey && selection?.mode === "cells") {
@@ -340,25 +473,28 @@ export const DataGrid = forwardRef<GridHandle, Props>(function DataGrid(
   const menuItems: MenuItem[] = menu?.formatsOnly
     ? [{ kind: "heading", label: "形式を指定してコピー" }, ...formatItems]
     : [
-        { label: "コピー", shortcut: "⌘C", onSelect: () => void copy("tsv") },
+        { label: "コピー", keyText: keyLabel("grid.copy"), onSelect: () => void copy("tsv") },
         {
           label: "ヘッダ付きでコピー",
-          shortcut: "⌘⇧C",
+          keyText: keyLabel("grid.copyWithHeader"),
           onSelect: () => void copy("tsvWithHeader"),
         },
         { kind: "separator" },
-        { kind: "heading", label: "形式を指定してコピー ⌘⌥C" },
+        { kind: "heading", label: `形式を指定してコピー ${keyLabel("grid.copyAs")}`.trim() },
         ...formatItems,
         ...(fkCell() && onForeignKey
           ? ([
               { kind: "separator" },
-              { label: "外部キーの参照先へ", shortcut: "⌘↓", onSelect: followForeignKey },
+              {
+                label: "外部キーの参照先へ",
+                keyText: keyLabel("grid.followForeignKey"),
+                onSelect: followForeignKey,
+              },
             ] satisfies MenuItem[])
           : []),
-        { kind: "separator" },
-        { label: "ペースト", disabled: true, tag: "v0.2" },
-        { label: "NULLを設定", disabled: true, tag: "v0.2" },
-        { label: "行を削除", disabled: true, tag: "v0.2" },
+        ...(editMenu && editMenu.length > 0
+          ? ([{ kind: "separator" }, ...editMenu] satisfies MenuItem[])
+          : []),
       ];
 
   const sortMark = (name: string) => {
@@ -432,8 +568,11 @@ export const DataGrid = forwardRef<GridHandle, Props>(function DataGrid(
           {visibleRows.map((row, i) => {
             const r = first + i;
             const rowSelected = selection?.mode === "rows" && selection.rows.includes(r);
+            const rowCls = [rowSelected ? "rsel" : "", rowClass?.(r) ?? ""]
+              .filter(Boolean)
+              .join(" ");
             return (
-              <tr key={r} className={rowSelected ? "rsel" : undefined} aria-rowindex={r + 1}>
+              <tr key={r} className={rowCls || undefined} aria-rowindex={r + 1}>
                 <td
                   className="rn"
                   onMouseDown={(e) => {
@@ -452,13 +591,72 @@ export const DataGrid = forwardRef<GridHandle, Props>(function DataGrid(
                     selection?.mode === "cells" &&
                     selection.focus.row === r &&
                     selection.focus.col === ci;
+                  const extra = cellClass?.(r, ci);
+                  const isEditing = editor?.row === r && editor.col === ci;
                   const cls = [
                     c.numeric ? "num" : "",
                     selected ? "sel" : "",
                     anchor ? "anchor" : "",
+                    extra ?? "",
+                    isEditing ? "editing" : "",
                   ]
                     .filter(Boolean)
                     .join(" ");
+                  if (isEditing) {
+                    const suggestions = editing?.suggestions(ci) ?? [];
+                    const listId = `sugg-${ci}`;
+                    const common = {
+                      "data-cell-editor": true,
+                      className: "celled",
+                      "aria-label": `${c.name} を編集`,
+                      value: editor.text,
+                      onKeyDown: onEditorKeyDown,
+                      onBlur: () => commitEdit(),
+                      onFocus: (e: { currentTarget: HTMLInputElement | HTMLTextAreaElement }) => {
+                        const el = e.currentTarget;
+                        el.setSelectionRange(el.value.length, el.value.length);
+                      },
+                      onChange: (e: { currentTarget: { value: string } }) => {
+                        const text = e.currentTarget.value;
+                        const ed = editorRef.current;
+                        if (ed) {
+                          setEditor({ ...ed, text, dirty: true });
+                        }
+                      },
+                    };
+                    return (
+                      // oxlint-disable-next-line react/no-array-index-key -- see the colgroup above.
+                      <td key={ci} className={cls}>
+                        {suggestions.length > 0 ? (
+                          <>
+                            <input
+                              type="text"
+                              list={listId}
+                              // oxlint-disable-next-line jsx-a11y/no-autofocus -- the editor opens on purpose.
+                              autoFocus
+                              {...common}
+                              aria-label={`${c.name} を編集`}
+                            />
+                            <datalist id={listId}>
+                              {suggestions.map((o) => (
+                                <option key={o} value={o}>
+                                  {o}
+                                </option>
+                              ))}
+                            </datalist>
+                          </>
+                        ) : (
+                          <textarea
+                            rows={1}
+                            // oxlint-disable-next-line jsx-a11y/no-autofocus -- the editor opens on purpose.
+                            autoFocus
+                            {...common}
+                            aria-label={`${c.name} を編集`}
+                          />
+                        )}
+                      </td>
+                    );
+                  }
                   return (
                     <td
                       // oxlint-disable-next-line react/no-array-index-key -- see the colgroup above.
@@ -467,10 +665,14 @@ export const DataGrid = forwardRef<GridHandle, Props>(function DataGrid(
                       onMouseDown={(e) => onCellMouseDown(e, r, ci)}
                       onMouseEnter={(e) => onCellMouseEnter(e, r, ci)}
                       onContextMenu={(e) => onContextMenu(e, r, ci)}
-                      title={v !== null && v.length > 40 ? v.slice(0, 500) : undefined}
+                      onDoubleClick={() => startEdit(r, ci)}
+                      title={
+                        cellTitle?.(r, ci) ??
+                        (v !== null && v.length > 40 ? v.slice(0, 500) : undefined)
+                      }
                     >
                       {v === null ? (
-                        <span className="nul">NULL</span>
+                        <span className="nul">{extra?.includes("dflt") ? "DEFAULT" : "NULL"}</span>
                       ) : v.length > 300 ? (
                         `${v.slice(0, 300)}…`
                       ) : (

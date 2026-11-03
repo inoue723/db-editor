@@ -1,5 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { CommandProvider } from "./commands/CommandProvider";
 import { ConnectionWindow } from "./connection/ConnectionWindow";
 import { Launcher } from "./launcher/Launcher";
 import "./styles.css";
@@ -16,7 +17,15 @@ const isConnectionWindow = new URLSearchParams(window.location.search).has("conn
 
 createRoot(root).render(
   <StrictMode>
-    <ToastProvider>{isConnectionWindow ? <ConnectionWindow /> : <Launcher />}</ToastProvider>
+    <ToastProvider>
+      {isConnectionWindow ? (
+        <CommandProvider>
+          <ConnectionWindow />
+        </CommandProvider>
+      ) : (
+        <Launcher />
+      )}
+    </ToastProvider>
     {/* Dev builds and browser E2E runs have no release to update to. */}
     {import.meta.env.PROD && !isConnectionWindow && <UpdateNotice />}
   </StrictMode>,
