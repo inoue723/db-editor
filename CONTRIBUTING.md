@@ -57,6 +57,12 @@ the signed updater artifacts, and writes `latest.json`. Nothing reaches users un
 published: installed apps read `releases/latest/download/latest.json`, which only resolves to a
 published release.
 
+### Versions
+
+Before v0.1 ships, releases are `0.0.x` so testers already get updates in place:
+`bump-patch-for-minor-pre-major` makes `feat:` bump the patch number. To cut a milestone such as
+v0.1.0, add `Release-As: 0.1.0` to the body of a commit on `main`.
+
 ### Auto-update
 
 The app uses the [Tauri updater](https://v2.tauri.app/plugin/updater/). It checks at startup and
