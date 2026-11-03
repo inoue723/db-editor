@@ -64,18 +64,11 @@ every 6 hours, and asks before downloading. Updates are verified against the pub
 `plugins.updater.pubkey` (`src-tauri/tauri.conf.json`), and `requireSignedVersion` rejects a
 manifest that pairs a new version number with an older signed build.
 
-One-time setup:
-
-1. Generate the key pair locally and keep the private key safe. Losing it means installed apps
-   can no longer be updated.
-   ```sh
-   pnpm tauri signer generate -w ~/.tauri/db-editor.key
-   ```
-2. Put the contents of `~/.tauri/db-editor.key.pub` in `plugins.updater.pubkey`.
-   The Release workflow fails while the placeholder is there.
-3. In the repository settings, add to the `release` environment the secrets
-   `TAURI_SIGNING_PRIVATE_KEY` (contents of `~/.tauri/db-editor.key`) and
-   `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
+The signing key pair was generated with `pnpm tauri signer generate`. The public key is in
+`plugins.updater.pubkey`. The private key and its password are the `TAURI_SIGNING_PRIVATE_KEY`
+and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secrets of the `release` environment; the build fails
+without them. Keep a backup of the private key: losing it means installed apps can no longer be
+updated, and replacing the key needs a release signed with the old one that ships the new pubkey.
 
 Platform notes:
 

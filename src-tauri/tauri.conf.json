@@ -48,7 +48,7 @@
   "mainBinaryName": "db-editor",
   "plugins": {
     "updater": {
-      "pubkey": "REPLACE_WITH_UPDATER_PUBLIC_KEY",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY5RjE2ODQ2MDUwOTM2MzcKUldRM05na0ZSbWp4YVZDSDlPOVZLMnJKSThrQjJNQWhEY0l2dlhCSHpBaXJuazFXa09lUEJrUmQK",
       "endpoints": [
         "https://github.com/inoue723/db-editor/releases/latest/download/latest.json"
       ],

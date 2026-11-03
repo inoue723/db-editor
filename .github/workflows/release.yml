@@ -63,12 +63,6 @@ jobs:
         if: runner.os == 'macOS'
         run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
       - run: pnpm install --frozen-lockfile
-      - name: Check the updater public key
-        run: |
-          if grep -q REPLACE_WITH_UPDATER_PUBLIC_KEY src-tauri/tauri.conf.json; then
-            echo "::error file=src-tauri/tauri.conf.json::Set plugins.updater.pubkey (see CONTRIBUTING.md, Releasing)"
-            exit 1
-          fi
       # Until an Apple Developer ID is available, macOS builds use ad-hoc signing
       # (bundle.macOS.signingIdentity = "-") and are not notarized.
       # When it is, add APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY,
