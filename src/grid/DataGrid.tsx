@@ -415,6 +415,9 @@ export const DataGrid = forwardRef<GridHandle, Props>(function DataGrid(
     if (e.button !== 0 || (editor?.row === row && editor.col === col)) {
       return;
     }
+    // Grid keys need the focus on the grid; not every engine moves it there when a
+    // cell of a focusable container is clicked.
+    wrap.current?.focus({ preventScroll: true });
     if (e.shiftKey && selection?.mode === "cells") {
       setSelection({ ...selection, focus: { row, col } });
     } else {
@@ -577,6 +580,7 @@ export const DataGrid = forwardRef<GridHandle, Props>(function DataGrid(
                   className="rn"
                   onMouseDown={(e) => {
                     if (e.button === 0) {
+                      wrap.current?.focus({ preventScroll: true });
                       setSelection(clickRow(selection, r, e.shiftKey, isMod(e)));
                     }
                   }}

@@ -143,6 +143,7 @@ test("pastes rows, marks deletes and adds rows from the command palette", async 
 
   // A two-row block pasted on a cell of the last row overflows into a new row.
   await grid.getByRole("cell", { name: "Bob" }).click();
+  await expect(grid).toBeFocused();
   await page.keyboard.press(`${mod}+v`);
   await page.getByRole("button", { name: "追加して貼り付け" }).click();
   await expect(grid.locator("td.ed")).toHaveText(["Carl", "41"]);
