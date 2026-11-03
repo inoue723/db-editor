@@ -1,0 +1,13 @@
+# Fast checks on staged files only. Clippy and tests run in CI.
+pre-commit:
+  parallel: true
+  jobs:
+    - name: rustfmt
+      glob: "*.rs"
+      run: cargo fmt --all -- --check
+    - name: oxfmt
+      glob: "*.{ts,tsx,js,json,md,yml,yaml,css}"
+      run: pnpm exec oxfmt --check --no-error-on-unmatched-pattern {staged_files}
+    - name: oxlint
+      glob: "*.{ts,tsx}"
+      run: pnpm exec oxlint --deny-warnings {staged_files}

@@ -1,0 +1,39 @@
+# Pins Node and pnpm. Rust is pinned by rust-toolchain.toml (rustup reads it automatically).
+[tools]
+node = "24"
+pnpm = "10.34.9"
+
+[tasks.setup]
+description = "Install dependencies and git hooks"
+run = ["pnpm install", "pnpm exec lefthook install"]
+
+[tasks.lint]
+description = "All static checks"
+run = [
+  "cargo fmt --all --check",
+  "cargo clippy --workspace --all-targets --locked -- -D warnings",
+  "pnpm format:check",
+  "pnpm lint",
+  "pnpm typecheck",
+  "typos",
+]
+
+[tasks.fmt]
+description = "Format Rust and frontend code"
+run = ["cargo fmt --all", "pnpm format"]
+
+[tasks.test]
+description = "Rust tests (needs Docker for PostgreSQL tests) and frontend unit tests"
+run = [
+  "cargo nextest run --workspace --locked",
+  "cargo test --doc --workspace --locked",
+  "pnpm test",
+]
+
+[tasks.bindings]
+description = "Regenerate src/bindings.ts from the Rust commands"
+run = "cargo test -p db-editor --test bindings --locked"
+
+[tasks.dev]
+description = "Run the app"
+run = "pnpm tauri dev"

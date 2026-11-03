@@ -1,0 +1,9 @@
+---
+source: crates/core/tests/tsv.rs
+expression: "tsv::encode(rows)"
+---
+id	name	note
+1	Alice	"line1
+line2"
+2	"Bob ""B"""	"tab	here"
+3		日本語

@@ -1,0 +1,17 @@
+[profile.default]
+slow-timeout = { period = "30s", terminate-after = 4 }
+
+# Tests that start a PostgreSQL container: keep concurrency modest.
+[test-groups]
+postgres = { max-threads = 4 }
+
+[[profile.default.overrides]]
+filter = "package(db-editor-pg) & kind(test)"
+test-group = "postgres"
+
+[profile.ci]
+fail-fast = false
+retries = { backoff = "fixed", count = 1, delay = "2s" }
+
+[profile.ci.junit]
+path = "junit.xml"

@@ -1,0 +1,18 @@
+[package]
+name = "db-editor-core"
+description = "Tauri-independent domain logic: change sets, inverse SQL, clipboard formats."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+thiserror.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+proptest.workspace = true
+
+[lints]
+workspace = true

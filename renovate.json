@@ -1,0 +1,39 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests", ":semanticCommits"],
+  "schedule": ["before 9am on monday"],
+  "timezone": "Asia/Tokyo",
+  "lockFileMaintenance": { "enabled": true },
+  "packageRules": [
+    {
+      "description": "Tauri's Rust crates and JS packages must move together",
+      "groupName": "tauri",
+      "matchPackageNames": ["tauri", "tauri-build", "tauri-plugin-*", "@tauri-apps/*"]
+    },
+    {
+      "description": "tauri-specta release candidates are pinned exactly and move together",
+      "groupName": "specta",
+      "matchPackageNames": ["specta", "specta-typescript", "tauri-specta"]
+    },
+    {
+      "groupName": "oxc",
+      "matchPackageNames": ["oxlint", "oxlint-tsgolint", "oxfmt"]
+    },
+    {
+      "groupName": "test tooling",
+      "matchPackageNames": [
+        "vitest",
+        "@vitest/*",
+        "@playwright/test",
+        "@testing-library/*",
+        "happy-dom"
+      ]
+    },
+    {
+      "matchUpdateTypes": ["minor", "patch"],
+      "matchCurrentVersion": "!/^0/",
+      "matchDepTypes": ["devDependencies", "dev-dependencies"],
+      "automerge": true
+    }
+  ]
+}
