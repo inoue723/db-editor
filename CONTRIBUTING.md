@@ -69,6 +69,10 @@ they never see a release whose builds are still running. Do not publish the draf
 
 If a build fails, the release stays a draft. Fix the cause and re-run the failed jobs.
 
+The repository uses immutable releases: once published, a release cannot be changed, and its
+tag cannot be published again even after the release is deleted. If a broken release gets
+published, delete it and ship the next patch version instead.
+
 ### Versions
 
 Before v0.1 ships, releases are `0.0.x` so testers already get updates in place. The first
