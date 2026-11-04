@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/inoue723/db-editor/compare/v0.0.5...v0.2.0) (2026-11-04)
+
+
+### Features
+
+* implement v0.2 (row editing, paste, undo, command palette, shortcut editor) ([#16](https://github.com/inoue723/db-editor/issues/16)) ([3191414](https://github.com/inoue723/db-editor/commit/31914147a03340d1a8acbe3519ffbc265b0f74a1))
+
 ## [0.0.5](https://github.com/inoue723/db-editor/compare/v0.0.4...v0.0.5) (2026-11-03)
 
 
