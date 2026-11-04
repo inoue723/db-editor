@@ -414,6 +414,79 @@ impl SavedQueries {
     }
 }
 
+/// One entry of `keybindings.json` (spec 5.3), in the format VS Code uses.
+///
+/// `key` is one or two chords such as `mod+shift+d` or `mod+k mod+s`. A `command`
+/// starting with `-` removes a default binding of that key.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct KeyBinding {
+    pub key: String,
+    pub command: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub when: Option<String>,
+}
+
+/// The user's key bindings and where they are stored.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct KeybindingsFile {
+    /// Absolute path of `keybindings.json`, shown so it can be edited directly.
+    pub path: String,
+    /// Changes to the default bindings; empty when the file does not exist.
+    pub bindings: Vec<KeyBinding>,
+}
+
+/// User key bindings in `keybindings.json` in the config folder.
+pub struct Keybindings {
+    path: PathBuf,
+}
+
+impl Keybindings {
+    #[must_use]
+    pub fn new(config_dir: &Path) -> Self {
+        Self {
+            path: config_dir.join("keybindings.json"),
+        }
+    }
+
+    /// Reads the user bindings.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the file exists but is not a JSON array of bindings.
+    pub fn load(&self) -> Result<KeybindingsFile, StoreError> {
+        let bindings = match fs::read(&self.path) {
+            Ok(bytes) => serde_json::from_slice(&bytes)?,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+            Err(e) => return Err(e.into()),
+        };
+        Ok(KeybindingsFile {
+            path: self.path.display().to_string(),
+            bindings,
+        })
+    }
+
+    /// Replaces the user bindings.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when a binding has no key or command, or the file cannot be written.
+    pub fn save(&self, bindings: &[KeyBinding]) -> Result<(), StoreError> {
+        if let Some(b) = bindings
+            .iter()
+            .find(|b| b.key.trim().is_empty() || b.command.trim().is_empty())
+        {
+            return Err(StoreError::Invalid(format!(
+                "a key binding needs a key and a command: {b:?}"
+            )));
+        }
+        let mut json = serde_json::to_vec_pretty(bindings)?;
+        json.push(b'\n');
+        write_atomic(&self.path, &json)
+    }
+}
+
 /// Accepts a name usable as a file name on macOS and Linux: no path separators,
 /// no leading dot, not empty.
 fn safe_file_stem(name: &str) -> Result<String, StoreError> {
@@ -431,6 +504,40 @@ fn safe_file_stem(name: &str) -> Result<String, StoreError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn keybindings_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Keybindings::new(dir.path());
+        assert!(store.load().unwrap().bindings.is_empty());
+        let bindings = vec![
+            KeyBinding {
+                key: "mod+shift+d".into(),
+                command: "table.duplicateRow".into(),
+                when: Some("focus == grid".into()),
+            },
+            KeyBinding {
+                key: "mod+d".into(),
+                command: "-table.duplicateRow".into(),
+                when: None,
+            },
+        ];
+        store.save(&bindings).unwrap();
+        assert_eq!(store.load().unwrap().bindings, bindings);
+        let text = fs::read_to_string(dir.path().join("keybindings.json")).unwrap();
+        assert!(!text.contains("\"when\": null"), "{text}");
+
+        fs::write(dir.path().join("keybindings.json"), "{ not json").unwrap();
+        assert!(matches!(store.load(), Err(StoreError::Json(_))));
+        assert!(matches!(
+            store.save(&[KeyBinding {
+                key: " ".into(),
+                command: "x".into(),
+                when: None
+            }]),
+            Err(StoreError::Invalid(_))
+        ));
+    }
 
     fn profile(name: &str) -> ConnectionProfile {
         ConnectionProfile {

@@ -11,8 +11,8 @@ import {
 import { DataGrid } from "../grid/DataGrid";
 import type { Selection } from "../grid/selection";
 import { type GridColumn, isNumericType } from "../grid/types";
+import { useCommands, useKeyLabel } from "../commands/CommandProvider";
 import { ApiError, call, errorMessage } from "../lib/api";
-import { keyLabel } from "../lib/keys";
 import { Confirm, Modal } from "../ui/Modal";
 import { useToast } from "../ui/Toast";
 import { type EditorHandle, SqlEditor } from "./SqlEditor";
@@ -192,16 +192,24 @@ export function SqlTab({
     [history, historyCursor],
   );
 
-  const editorCommands = useMemo(
-    () => ({
-      run: () => run(false),
-      runAll: () => run(true),
-      cancel: () => void cancel(),
-      format,
-      historyPrevious: () => stepHistory(1),
-      historyNext: () => stepHistory(-1),
-    }),
-    [run, cancel, format, stepHistory],
+  const keyLabel = useKeyLabel();
+  useCommands(
+    {
+      "sql.run": () => run(false),
+      "sql.runAll": () => run(true),
+      "sql.cancel": () => void cancel(),
+      "sql.format": format,
+      "sql.historyPrevious": () => stepHistory(1),
+      "sql.historyNext": () => stepHistory(-1),
+      "sql.save": () => {
+        if (tab.savedName) {
+          void save(tab.savedName);
+        } else {
+          setSaving("");
+        }
+      },
+    },
+    active,
   );
 
   async function save(name: string) {
@@ -264,17 +272,17 @@ export function SqlTab({
         <button type="button" className="pbtn small" onClick={() => run(false)} disabled={running}>
           実行{" "}
           <span className="kbd" style={{ color: "inherit", opacity: 0.8 }}>
-            {keyLabel("⌘↩")}
+            {keyLabel("sql.run")}
           </span>
         </button>
         <button type="button" className="sbtn small" onClick={() => run(true)} disabled={running}>
-          全て実行 <span className="kbd">{keyLabel("⌥⌘↩")}</span>
+          全て実行 <span className="kbd">{keyLabel("sql.runAll")}</span>
         </button>
         <button type="button" className="ibtn" onClick={() => void cancel()} disabled={!running}>
-          キャンセル <span className="kbd">{keyLabel("⌘.")}</span>
+          キャンセル <span className="kbd">{keyLabel("sql.cancel")}</span>
         </button>
         <button type="button" className="ibtn" onClick={format}>
-          整形 <span className="kbd">{keyLabel("⌥⇧F")}</span>
+          整形 <span className="kbd">{keyLabel("sql.format")}</span>
         </button>
         <span className="sp" />
         <button type="button" className="ibtn" onClick={() => setSaving(tab.savedName ?? "")}>
@@ -292,7 +300,6 @@ export function SqlTab({
             ref={editor}
             initialText={tab.initialSql}
             schema={schema}
-            commands={editorCommands}
             onChange={(text) => {
               textRef.current = text;
             }}
@@ -318,6 +325,7 @@ export function SqlTab({
                 </div>
                 {current?.outcome.kind === "rows" ? (
                   <DataGrid
+                    active={active}
                     label="クエリ結果"
                     columns={resultColumns}
                     rows={current.outcome.rows}
@@ -352,8 +360,8 @@ export function SqlTab({
             ) : (
               <div className="msg">
                 <span className="muted">
-                  {keyLabel("⌘↩")} でカーソル位置の文(選択中なら選択範囲)を、{keyLabel("⌥⌘↩")}{" "}
-                  で全文を実行します。結果は文ごとにタブで並びます。
+                  {keyLabel("sql.run")} でカーソル位置の文(選択中なら選択範囲)を、
+                  {keyLabel("sql.runAll")} で全文を実行します。結果は文ごとにタブで並びます。
                 </span>
               </div>
             )}

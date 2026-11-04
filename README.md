@@ -15,6 +15,17 @@ v0.1 (read and query) covers:
   per-statement result tabs and a transaction indicator
 - Copy as TSV, CSV, JSON, Markdown, `INSERT`, `UPDATE` or `WHERE`
 
+v0.2 (editing) adds:
+
+- Row editing: edit cells in the grid or the row sidebar, add, duplicate and delete rows, set
+  NULL or DEFAULT. Changes stay unsaved (yellow, green, struck through) until ⌘S, which runs
+  them in one transaction; ⌘⇧S shows the SQL first, and production connections always do
+- Paste from spreadsheets: overwrite a cell or a block, fill a selection, add rows after
+  selected rows, or update rows by primary key (⌘⇧V). A header row maps columns by name
+- Undo and redo (⌘Z / ⌘⇧Z) of every unsaved change; a paste is one step
+- Every operation is a command: a command palette (⌘⇧P), Open Quickly (⌘P), and a shortcut
+  editor (⌘K ⌘S) that writes `keybindings.json` in the config folder (VS Code format)
+
 SSH tunnels are not in this build yet.
 
 ## Development

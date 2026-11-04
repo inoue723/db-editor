@@ -9,17 +9,28 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
-use db_editor_pg::Session;
+use db_editor_pg::{ConnectOptions, Session};
 
-use crate::store::{ConnectionProfile, History, Profiles, SavedQueries, Secrets};
+use crate::store::{ConnectionProfile, History, Keybindings, Profiles, SavedQueries, Secrets};
 
 /// An open connection of a window.
 pub struct Connected {
     pub profile: ConnectionProfile,
     pub database: String,
     pub server_version: String,
+    pub options: ConnectOptions,
     pub browse: Session,
     pub editor: Session,
+    /// Saves row changes in its own transactions, so that browsing queries running at
+    /// the same time never end up inside them. Opened on the first save; the lock
+    /// also keeps two saves of one window from interleaving.
+    pub writer: tokio::sync::Mutex<Option<Session>>,
+}
+
+/// The last grid selection copied as TSV, with NULLs that plain text cannot carry.
+pub struct CopiedCells {
+    pub text: String,
+    pub cells: Vec<Vec<Option<String>>>,
 }
 
 struct WindowEntry {
@@ -32,7 +43,9 @@ pub struct AppState {
     pub profiles: Profiles,
     pub history: History,
     pub saved_queries: SavedQueries,
+    pub keybindings: Keybindings,
     pub secrets: Box<dyn Secrets>,
+    pub last_copy: Mutex<Option<CopiedCells>>,
     windows: Mutex<HashMap<String, WindowEntry>>,
     next_window: AtomicU64,
 }
@@ -43,13 +56,16 @@ impl AppState {
         profiles: Profiles,
         history: History,
         saved_queries: SavedQueries,
+        keybindings: Keybindings,
         secrets: Box<dyn Secrets>,
     ) -> Self {
         Self {
             profiles,
             history,
             saved_queries,
+            keybindings,
             secrets,
+            last_copy: Mutex::new(None),
             windows: Mutex::new(HashMap::new()),
             next_window: AtomicU64::new(1),
         }

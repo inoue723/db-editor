@@ -10,20 +10,23 @@
 use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use db_editor_core::copy::{self, CopyRequest};
+use db_editor_core::copy::{self, CopyFormat, CopyRequest};
+use db_editor_core::edit::ChangeSet;
 use db_editor_core::url::{self, ParsedUrl};
 use db_editor_core::{sql, tsv};
 use db_editor_pg::browse::{self, Page, PageRequest};
 use db_editor_pg::catalog::{self, Schema, TableInfo};
+use db_editor_pg::edit::{self as pg_edit, SaveOutcome};
 use db_editor_pg::exec::{self, Outcome, StatementResult, TransactionStatus};
 use db_editor_pg::{ConnectOptions, ErrorInfo};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder, Window};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 
-use crate::state::{AppState, Connected};
+use crate::state::{AppState, Connected, CopiedCells};
 use crate::store::{
-    ConnectionProfile, Environment, HistoryEntry, SavedQuery, StoreError, password_key,
+    ConnectionProfile, Environment, HistoryEntry, KeyBinding, KeybindingsFile, SavedQuery,
+    StoreError, password_key,
 };
 
 /// Category of a [`CommandError`].
@@ -294,8 +297,10 @@ pub async fn session_connect(
         profile,
         database,
         server_version,
+        options,
         browse,
         editor,
+        writer: tokio::sync::Mutex::new(None),
     });
     state.set_connected(window.label(), Some(Arc::clone(&connected)));
     if let Err(error) = state.profiles.touch(&profile_id, now_ms()) {
@@ -625,6 +630,49 @@ pub fn delete_saved_query(
 }
 
 // ---------------------------------------------------------------------------
+// Row editing
+// ---------------------------------------------------------------------------
+
+/// The statements that saving the changes would run, for the preview (⌘⇧S).
+#[tauri::command]
+#[specta::specta]
+pub fn preview_changes(changes: ChangeSet) -> Result<Vec<String>, CommandError> {
+    changes
+        .statements()
+        .map_err(|e| CommandError::invalid(e.to_string()))
+}
+
+/// Saves row changes in one transaction. On a production connection the frontend
+/// must confirm first and pass `allow_writes`.
+#[tauri::command]
+#[specta::specta]
+pub async fn save_changes(
+    window: Window,
+    state: State<'_, AppState>,
+    changes: ChangeSet,
+    allow_writes: bool,
+) -> Result<SaveOutcome, CommandError> {
+    let c = connected(&window, &state)?;
+    if c.profile.read_only {
+        return Err(CommandError::invalid("this connection is read-only"));
+    }
+    if !allow_writes && c.profile.environment == Environment::Production {
+        return Err(CommandError::new(
+            ErrorKind::ConfirmationRequired,
+            "production database: confirm before saving",
+        ));
+    }
+    let mut writer = c.writer.lock().await;
+    if writer.as_ref().is_none_or(db_editor_pg::Session::is_closed) {
+        *writer = Some(db_editor_pg::open(&c.options).await?);
+    }
+    let Some(session) = writer.as_mut() else {
+        return Err(CommandError::new(ErrorKind::NotConnected, "not connected"));
+    };
+    Ok(pg_edit::apply(session.client_mut(), &changes).await?)
+}
+
+// ---------------------------------------------------------------------------
 // Clipboard
 // ---------------------------------------------------------------------------
 
@@ -635,7 +683,57 @@ pub fn delete_saved_query(
 pub fn copy_selection(app: AppHandle, request: CopyRequest) -> Result<String, CommandError> {
     let text = copy::render(&request).map_err(|e| CommandError::invalid(e.to_string()))?;
     write_text(&app, &text)?;
+    // Remember TSV copies with their NULLs, which the text loses, for a paste.
+    let header = match request.format {
+        CopyFormat::Tsv => Some(Vec::new()),
+        CopyFormat::TsvWithHeader => Some(vec![
+            request
+                .columns
+                .iter()
+                .map(|c| Some(c.name.clone()))
+                .collect(),
+        ]),
+        _ => None,
+    };
+    if let Some(state) = app.try_state::<AppState>() {
+        let copied = header.map(|header| CopiedCells {
+            text: text.clone(),
+            cells: header.into_iter().chain(request.rows.clone()).collect(),
+        });
+        *state
+            .last_copy
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = copied;
+    }
     Ok(text)
+}
+
+/// Clipboard text for a paste.
+#[derive(Debug, Clone, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ClipboardContent {
+    pub text: String,
+    /// The copied cells with their NULLs, when the text is still what this app last
+    /// copied from a grid (in any window).
+    pub cells: Option<Vec<Vec<Option<String>>>>,
+}
+
+/// Reads the clipboard for a paste. Empty when it holds no text.
+#[tauri::command]
+#[specta::specta]
+pub fn read_clipboard(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<ClipboardContent, CommandError> {
+    let text = app.clipboard().read_text().unwrap_or_default();
+    let cells = state
+        .last_copy
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .as_ref()
+        .filter(|c| c.text == text)
+        .map(|c| c.cells.clone());
+    Ok(ClipboardContent { text, cells })
 }
 
 /// Puts text on the clipboard.
@@ -649,6 +747,27 @@ fn write_text(app: &AppHandle, text: &str) -> Result<(), CommandError> {
     app.clipboard()
         .write_text(text)
         .map_err(|e| CommandError::new(ErrorKind::Storage, e.to_string()))
+}
+
+// ---------------------------------------------------------------------------
+// Key bindings
+// ---------------------------------------------------------------------------
+
+/// Reads the user key bindings (`keybindings.json`).
+#[tauri::command]
+#[specta::specta]
+pub fn load_keybindings(state: State<'_, AppState>) -> Result<KeybindingsFile, CommandError> {
+    Ok(state.keybindings.load()?)
+}
+
+/// Replaces the user key bindings.
+#[tauri::command]
+#[specta::specta]
+pub fn save_keybindings(
+    state: State<'_, AppState>,
+    bindings: Vec<KeyBinding>,
+) -> Result<(), CommandError> {
+    Ok(state.keybindings.save(&bindings)?)
 }
 
 /// Closes connections of windows that are gone. Called from the window event handler.

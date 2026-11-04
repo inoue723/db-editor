@@ -53,6 +53,13 @@ export const commands = {
 	saveQuery: (name: string, sql: string) => typedError<SavedQuery, CommandError_Serialize>(__TAURI_INVOKE("save_query", { name, sql })),
 	/**  Deletes a saved query of the window's connection. */
 	deleteSavedQuery: (name: string) => typedError<null, CommandError_Serialize>(__TAURI_INVOKE("delete_saved_query", { name })),
+	/**  The statements that saving the changes would run, for the preview (⌘⇧S). */
+	previewChanges: (changes: ChangeSet) => typedError<string[], CommandError_Serialize>(__TAURI_INVOKE("preview_changes", { changes })),
+	/**
+	 *  Saves row changes in one transaction. On a production connection the frontend
+	 *  must confirm first and pass `allow_writes`.
+	 */
+	saveChanges: (changes: ChangeSet, allowWrites: boolean) => typedError<SaveOutcome_Serialize, CommandError_Serialize>(__TAURI_INVOKE("save_changes", { changes, allowWrites })),
 	/**
 	 *  Renders a grid selection in the requested format and puts it on the clipboard.
 	 *  Returns the copied text.
@@ -60,11 +67,62 @@ export const commands = {
 	copySelection: (request: CopyRequest_Deserialize) => typedError<string, CommandError_Serialize>(__TAURI_INVOKE("copy_selection", { request })),
 	/**  Puts text on the clipboard. */
 	writeClipboard: (text: string) => typedError<null, CommandError_Serialize>(__TAURI_INVOKE("write_clipboard", { text })),
+	/**  Reads the clipboard for a paste. Empty when it holds no text. */
+	readClipboard: () => typedError<ClipboardContent_Serialize, CommandError_Serialize>(__TAURI_INVOKE("read_clipboard")),
+	/**  Reads the user key bindings (`keybindings.json`). */
+	loadKeybindings: () => typedError<KeybindingsFile_Serialize, CommandError_Serialize>(__TAURI_INVOKE("load_keybindings")),
+	/**  Replaces the user key bindings. */
+	saveKeybindings: (bindings: KeyBinding_Deserialize[]) => typedError<null, CommandError_Serialize>(__TAURI_INVOKE("save_keybindings", { bindings })),
 };
 
 /* Types */
+/**  The new value of a cell. */
+export type CellValue = 
+/**  A value in PostgreSQL text format. The empty string is an empty string, not NULL. */
+{ kind: "value"; text: string } | { kind: "null" } | 
+/**  The column default (`DEFAULT`). */
+{ kind: "default" };
+
+/**  The unsaved changes of one table. */
+export type ChangeSet = {
+	schema: string,
+	table: string,
+	/**  Columns that identify a row. */
+	keyColumns: string[],
+	changes: RowChange[],
+};
+
+/**  Clipboard text for a paste. */
+export type ClipboardContent = ClipboardContent_Serialize | ClipboardContent_Deserialize;
+
+/**  Clipboard text for a paste. */
+export type ClipboardContent_Deserialize = {
+	text: string,
+	/**
+	 *  The copied cells with their NULLs, when the text is still what this app last
+	 *  copied from a grid (in any window).
+	 */
+	cells?: ((string | null)[])[] | null,
+};
+
+/**  Clipboard text for a paste. */
+export type ClipboardContent_Serialize = {
+	text: string,
+	/**
+	 *  The copied cells with their NULLs, when the text is still what this app last
+	 *  copied from a grid (in any window).
+	 */
+	cells: ((string | null)[])[] | null,
+};
+
 /**  A column of a table or view. */
 export type Column = Column_Serialize | Column_Deserialize;
+
+/**  A column and its new value. */
+export type ColumnValue = {
+	column: string,
+	value: CellValue,
+};
 
 /**  A column of a table or view. */
 export type Column_Deserialize = {
@@ -76,6 +134,12 @@ export type Column_Deserialize = {
 	notNull: boolean,
 	default?: string | null,
 	comment?: string | null,
+	/**  An identity column (`GENERATED ... AS IDENTITY`). */
+	identity: boolean,
+	/**  A generated column (`GENERATED ALWAYS AS (...) STORED`), which cannot be written. */
+	generated: boolean,
+	/**  Labels of an enum type, in order; empty for other types. */
+	enumValues: string[],
 };
 
 /**  A column of a table or view. */
@@ -88,6 +152,12 @@ export type Column_Serialize = {
 	notNull: boolean,
 	default: string | null,
 	comment: string | null,
+	/**  An identity column (`GENERATED ... AS IDENTITY`). */
+	identity: boolean,
+	/**  A generated column (`GENERATED ALWAYS AS (...) STORED`), which cannot be written. */
+	generated: boolean,
+	/**  Labels of an enum type, in order; empty for other types. */
+	enumValues: string[],
 };
 
 /**  Error returned to the frontend. */
@@ -326,6 +396,57 @@ export type Index = {
 	unique: boolean,
 };
 
+/**
+ *  One entry of `keybindings.json` (spec 5.3), in the format VS Code uses.
+ * 
+ *  `key` is one or two chords such as `mod+shift+d` or `mod+k mod+s`. A `command`
+ *  starting with `-` removes a default binding of that key.
+ */
+export type KeyBinding = KeyBinding_Serialize | KeyBinding_Deserialize;
+
+/**
+ *  One entry of `keybindings.json` (spec 5.3), in the format VS Code uses.
+ * 
+ *  `key` is one or two chords such as `mod+shift+d` or `mod+k mod+s`. A `command`
+ *  starting with `-` removes a default binding of that key.
+ */
+export type KeyBinding_Deserialize = {
+	key: string,
+	command: string,
+	when?: string | null,
+};
+
+/**
+ *  One entry of `keybindings.json` (spec 5.3), in the format VS Code uses.
+ * 
+ *  `key` is one or two chords such as `mod+shift+d` or `mod+k mod+s`. A `command`
+ *  starting with `-` removes a default binding of that key.
+ */
+export type KeyBinding_Serialize = {
+	key: string,
+	command: string,
+	when?: string,
+};
+
+/**  The user's key bindings and where they are stored. */
+export type KeybindingsFile = KeybindingsFile_Serialize | KeybindingsFile_Deserialize;
+
+/**  The user's key bindings and where they are stored. */
+export type KeybindingsFile_Deserialize = {
+	/**  Absolute path of `keybindings.json`, shown so it can be edited directly. */
+	path: string,
+	/**  Changes to the default bindings; empty when the file does not exist. */
+	bindings: KeyBinding_Deserialize[],
+};
+
+/**  The user's key bindings and where they are stored. */
+export type KeybindingsFile_Serialize = {
+	/**  Absolute path of `keybindings.json`, shown so it can be edited directly. */
+	path: string,
+	/**  Changes to the default bindings; empty when the file does not exist. */
+	bindings: KeyBinding_Serialize[],
+};
+
 /**  What one statement produced. */
 export type Outcome = Outcome_Serialize | Outcome_Deserialize;
 
@@ -465,6 +586,21 @@ export type ResultColumn_Serialize = {
 	typeName: string | null,
 };
 
+/**  One unsaved change. */
+export type RowChange = 
+/**
+ *  Changes cells of the row whose key is `key` (values in the order of
+ *  [`ChangeSet::key_columns`], as loaded before the edit).
+ */
+{ kind: "update"; key: (string | null)[]; values: ColumnValue[] } | 
+/**  Adds a row. Columns that are not listed get their default. */
+{ kind: "insert"; values: ColumnValue[]; 
+/**
+ *  Updates the existing row instead when the key already exists
+ *  ("paste matching the primary key", spec 4.3).
+ */
+upsert: boolean } | { kind: "delete"; key: (string | null)[] };
+
 /**  Which statements of the editor text to run. */
 export type RunMode = 
 /**  The statement under the cursor (a UTF-16 offset, as JavaScript counts). */
@@ -489,6 +625,35 @@ export type RunResult_Serialize = {
 	/**  Ranges of the statements that were run, in order. */
 	ranges: TextRange[],
 	transaction: TransactionStatus,
+};
+
+/**  Outcome of a save. A failure rolls back every change. */
+export type SaveOutcome = SaveOutcome_Serialize | SaveOutcome_Deserialize;
+
+/**  Outcome of a save. A failure rolls back every change. */
+export type SaveOutcome_Deserialize = {
+	kind: "saved",
+} & Saved | { kind: "failed"; 
+/**  The change that failed, when the failure belongs to one. */
+index?: number | null; error: ErrorInfo_Deserialize };
+
+/**  Outcome of a save. A failure rolls back every change. */
+export type SaveOutcome_Serialize = {
+	kind: "saved",
+} & Saved | { kind: "failed"; 
+/**  The change that failed, when the failure belongs to one. */
+index: number | null; error: ErrorInfo_Serialize };
+
+/**  The rows stored by a successful save. */
+export type Saved = {
+	/**  Columns of the returned rows (the table's columns). */
+	columns: string[],
+	/**
+	 *  For each change, the row as stored (`RETURNING *`); `None` for deletes and for
+	 *  an upsert that changed nothing.
+	 */
+	rows: ((string | null)[] | null)[],
+	elapsedMs: number,
 };
 
 /**  A saved query: a `.sql` file in the connection's folder (spec 3.7). */
