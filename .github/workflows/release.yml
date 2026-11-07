@@ -42,8 +42,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-          PR_NUMBER: ${{ fromJSON(steps.release.outputs.pr).number }}
-        run: gh pr merge "$PR_NUMBER" --squash
+          # Step env is evaluated even when `if` is false, and fromJSON('') fails the job when
+          # no release PR was created (e.g. a chore: push), so parse the JSON in the shell.
+          PR_JSON: ${{ steps.release.outputs.pr }}
+        run: gh pr merge "$(jq -r .number <<<"$PR_JSON")" --squash
       - id: tag
         if: steps.merge.outcome == 'success'
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
