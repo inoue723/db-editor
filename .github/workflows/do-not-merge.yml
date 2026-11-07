@@ -1,0 +1,19 @@
+name: do not merge
+
+# Fails while the do-not-merge label is set. Renovate (platformAutomerge: false)
+# waits for every check to pass before merging, so the label stops its automerge.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions: {}
+
+jobs:
+  check-label:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Fail if do-not-merge label is set
+        if: contains(github.event.pull_request.labels.*.name, 'do-not-merge')
+        run: |
+          echo "::error::The do-not-merge label is set"
+          exit 1
