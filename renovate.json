@@ -1,10 +1,41 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended", "helpers:pinGitHubActionDigests", ":semanticCommits"],
-  "schedule": ["before 9am on monday"],
   "timezone": "Asia/Tokyo",
-  "lockFileMaintenance": { "enabled": true },
+  "labels": ["dependencies"],
+  "minimumReleaseAge": "2 days",
+  "internalChecksFilter": "strict",
+  "platformAutomerge": false,
+  "automerge": true,
+  "automergeType": "pr",
+  "rebaseWhen": "conflicted",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["* 10-23 * * 6"]
+  },
   "packageRules": [
+    {
+      "description": "Major updates are merged by hand",
+      "matchUpdateTypes": ["major"],
+      "automerge": false
+    },
+    {
+      "description": "Treat minor updates of 0.x versions as breaking",
+      "matchCurrentVersion": "<1.0.0",
+      "matchUpdateTypes": ["minor"],
+      "automerge": false
+    },
+    {
+      "description": "Update Node.js in mise.toml and elsewhere together, LTS (even) majors only",
+      "groupName": "node",
+      "matchDepNames": ["node"],
+      "allowedVersions": "/^v?\\d*[02468]\\./"
+    },
+    {
+      "description": "Update pnpm in mise.toml and packageManager together",
+      "groupName": "pnpm",
+      "matchDepNames": ["pnpm"]
+    },
     {
       "description": "Tauri's Rust crates and JS packages must move together",
       "groupName": "tauri",
@@ -28,12 +59,6 @@
         "@testing-library/*",
         "happy-dom"
       ]
-    },
-    {
-      "matchUpdateTypes": ["minor", "patch"],
-      "matchCurrentVersion": "!/^0/",
-      "matchDepTypes": ["devDependencies", "dev-dependencies"],
-      "automerge": true
     }
   ]
 }
