@@ -18,7 +18,7 @@ env:
 
 jobs:
   lint:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -48,7 +48,7 @@ jobs:
 
   rust-test:
     name: rust-test (PostgreSQL ${{ matrix.pg }})
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
       matrix:
@@ -72,7 +72,7 @@ jobs:
         run: cargo test --doc --workspace --locked
 
   web-test:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -114,7 +114,7 @@ jobs:
         run: pnpm tauri build --debug --no-bundle
 
   deps:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -129,7 +129,7 @@ jobs:
         run: pnpm audit --prod
 
   actions-security:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       security-events: write
