@@ -2,7 +2,7 @@
 # Connect with postgres://postgres:postgres@localhost:54320/postgres
 services:
   postgres:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_PASSWORD: postgres
     ports:
