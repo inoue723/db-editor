@@ -10,7 +10,7 @@ permissions: {}
 
 jobs:
   check-label:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Fail if do-not-merge label is set
         if: contains(github.event.pull_request.labels.*.name, 'do-not-merge')
