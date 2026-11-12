@@ -9,11 +9,18 @@
   "automerge": true,
   "automergeType": "pr",
   "rebaseWhen": "conflicted",
+  "schedule": ["* 10-23 * * 2,4,6"],
+  "prConcurrentLimit": 5,
   "lockFileMaintenance": {
     "enabled": true,
     "schedule": ["* 10-23 * * 6"]
   },
   "packageRules": [
+    {
+      "description": "Group non-major updates into one PR; later rules that set groupName split off",
+      "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
+      "groupName": "non-major dependencies"
+    },
     {
       "description": "Major updates are merged by hand",
       "matchUpdateTypes": ["major"],
@@ -23,7 +30,8 @@
       "description": "Treat minor updates of 0.x versions as breaking",
       "matchCurrentVersion": "<1.0.0",
       "matchUpdateTypes": ["minor"],
-      "automerge": false
+      "automerge": false,
+      "groupName": "0.x minor updates"
     },
     {
       "description": "Update Node.js in mise.toml and elsewhere together, LTS (even) majors only",
