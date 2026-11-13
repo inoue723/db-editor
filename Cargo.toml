@@ -20,9 +20,9 @@ tokio-postgres = "0.7"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # tauri-specta / specta are release candidates; pin exact versions so they move together.
-specta = { version = "=2.0.0-rc.26", features = ["derive"] }
-specta-typescript = "=0.0.13"
-tauri-specta = { version = "=2.0.0-rc.26", features = ["derive", "typescript"] }
+specta = { version = "=2.0.0-rc.28", features = ["derive"] }
+specta-typescript = "=0.0.15"
+tauri-specta = { version = "=2.0.0-rc.28", features = ["derive", "typescript"] }
 # dev
 insta = "1"
 proptest = "1"
