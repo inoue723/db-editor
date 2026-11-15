@@ -11,15 +11,29 @@ export class ApiError extends Error {
   }
 }
 
-type Result<T> = { status: "ok"; data: T } | { status: "error"; error: CommandError_Serialize };
+function isCommandError(value: unknown): value is CommandError_Serialize {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "kind" in value &&
+    "message" in value &&
+    typeof value.message === "string"
+  );
+}
 
-/** Unwraps a tauri-specta result, throwing {@link ApiError} on failure. */
-export async function call<T>(result: Promise<Result<T>>): Promise<T> {
-  const r = await result;
-  if (r.status === "error") {
-    throw new ApiError(r.error);
+/**
+ * Awaits a tauri-specta command. Commands reject with the Rust `CommandError`;
+ * this rethrows it as {@link ApiError} so callers get an `Error` with the details.
+ */
+export async function call<T>(result: Promise<T>): Promise<T> {
+  try {
+    return await result;
+  } catch (error) {
+    if (isCommandError(error)) {
+      throw new ApiError(error);
+    }
+    throw error;
   }
-  return r.data;
 }
 
 /** A human-readable message for any thrown value. */
