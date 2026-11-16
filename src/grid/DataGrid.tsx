@@ -30,6 +30,8 @@ import type { GridColumn, GridRow } from "./types";
 const ROW_HEIGHT = 24;
 const OVERSCAN = 12;
 const ROW_NUMBER_WIDTH = 56;
+const MIN_COLUMN_WIDTH = 40;
+const NO_HIDDEN: ReadonlySet<number> = new Set();
 
 const FORMAT_LABEL: Record<CopyFormat, string> = {
   tsv: "TSV",
@@ -95,6 +97,13 @@ interface Props {
   cellTitle?: (row: number, col: number) => string | undefined;
   /** Menu items for editing, added to the context menu. */
   editMenu?: MenuItem[];
+  /** Called when the user hides or shows columns (positions in `columns`). */
+  onHiddenColumnsChange?: (hidden: ReadonlySet<number>) => void;
+}
+
+/** Positions strictly between two columns. */
+function between(lo: number, hi: number): number[] {
+  return Array.from({ length: Math.max(0, hi - lo - 1) }, (_, k) => lo + 1 + k);
 }
 
 function columnWidth(col: GridColumn, rows: GridRow[], index: number): number {
@@ -131,6 +140,7 @@ export const DataGrid = forwardRef<GridHandle, Props>(function DataGrid(
     cellClass,
     cellTitle,
     editMenu,
+    onHiddenColumnsChange,
   },
   ref,
 ) {
@@ -148,7 +158,13 @@ export const DataGrid = forwardRef<GridHandle, Props>(function DataGrid(
   const [scrollTop, setScrollTop] = useState(0);
   const [height, setHeight] = useState(600);
   const [selection, setSelection] = useState<Selection | null>(null);
-  const [menu, setMenu] = useState<{ x: number; y: number; formatsOnly?: boolean } | null>(null);
+  const [menu, setMenu] = useState<{
+    x: number;
+    y: number;
+    formatsOnly?: boolean;
+    /** The menu of a column header. */
+    column?: number;
+  } | null>(null);
 
   // Column widths are computed once per column set, so loading more rows does not shift them.
   const widthKey = columns.map((c) => `${c.name}:${c.typeName}`).join("|");
@@ -157,6 +173,110 @@ export const DataGrid = forwardRef<GridHandle, Props>(function DataGrid(
     // oxlint-disable-next-line react/exhaustive-deps -- recomputed only when the columns change.
     [widthKey, rows.length > 0],
   );
+
+  // Widths set by dragging a header edge, and hidden columns, by position. Both are kept while
+  // the column set stays the same (reloads, filters, sorts) and dropped when it changes.
+  const [layout, setLayout] = useState<{
+    key: string;
+    widths: ReadonlyMap<number, number>;
+    hidden: ReadonlySet<number>;
+  }>({ key: widthKey, widths: new Map(), hidden: NO_HIDDEN });
+  const sameLayout = layout.key === widthKey;
+  const customWidths = sameLayout ? layout.widths : null;
+  const hidden = sameLayout ? layout.hidden : NO_HIDDEN;
+  const shownWidths = widths.map((w, i) => customWidths?.get(i) ?? w);
+  const visible = useMemo(
+    () => columns.map((_, i) => i).filter((i) => !hidden.has(i)),
+    [columns, hidden],
+  );
+
+  const updateLayout = useCallback(
+    (change: {
+      widths?: (prev: ReadonlyMap<number, number>) => ReadonlyMap<number, number>;
+      hidden?: ReadonlySet<number>;
+    }) => {
+      setLayout((prev) => {
+        const base =
+          prev.key === widthKey ? prev : { key: widthKey, widths: new Map(), hidden: NO_HIDDEN };
+        return {
+          key: widthKey,
+          widths: change.widths ? change.widths(base.widths) : base.widths,
+          hidden: change.hidden ?? base.hidden,
+        };
+      });
+    },
+    [widthKey],
+  );
+
+  const onHiddenRef = useRef(onHiddenColumnsChange);
+  onHiddenRef.current = onHiddenColumnsChange;
+  useLayoutEffect(() => {
+    onHiddenRef.current?.(hidden);
+  }, [hidden]);
+
+  function setHidden(next: ReadonlySet<number>) {
+    updateLayout({ hidden: next });
+    // A selection on a hidden column would act on cells the user cannot see.
+    if (
+      selection?.mode === "cells" &&
+      (next.has(selection.focus.col) || next.has(selection.anchor.col))
+    ) {
+      setSelection(null);
+    }
+  }
+
+  function hideColumn(col: number) {
+    if (visible.length <= 1) {
+      toast("すべての列を非表示にはできません");
+      return;
+    }
+    setHidden(new Set([...hidden, col]));
+  }
+
+  function showColumns(cols: number[]) {
+    setHidden(new Set([...hidden].filter((c) => !cols.includes(c))));
+  }
+
+  /** Set while a header edge is dragged, so the click that ends the drag does not sort. */
+  const resizing = useRef(false);
+
+  function startResize(e: MouseEvent, col: number) {
+    if (e.button !== 0) {
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    resizing.current = true;
+    const startX = e.clientX;
+    const startWidth = shownWidths[col] ?? MIN_COLUMN_WIDTH;
+    const prevCursor = document.body.style.cursor;
+    document.body.style.cursor = "col-resize";
+    const onMove = (ev: globalThis.MouseEvent) => {
+      const width = Math.max(MIN_COLUMN_WIDTH, Math.round(startWidth + ev.clientX - startX));
+      updateLayout({ widths: (prev) => new Map(prev).set(col, width) });
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = prevCursor;
+      // The click that follows this mouseup is part of the drag.
+      setTimeout(() => {
+        resizing.current = false;
+      }, 0);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+
+  function resetWidth(col: number) {
+    updateLayout({
+      widths: (prev) => {
+        const next = new Map(prev);
+        next.delete(col);
+        return next;
+      },
+    });
+  }
 
   useEffect(() => {
     setSelection(null);
@@ -261,7 +381,7 @@ export const DataGrid = forwardRef<GridHandle, Props>(function DataGrid(
   }
 
   function moveAfterEdit(dRow: number, dCol: number) {
-    const next = moveSelection(selection, dRow, dCol, false, rows.length, columns.length);
+    const next = moveSelection(selection, dRow, dCol, false, rows.length, columns.length, hidden);
     setSelection(next);
     if (next?.mode === "cells") {
       scrollToRow(next.focus.row);
@@ -303,7 +423,7 @@ export const DataGrid = forwardRef<GridHandle, Props>(function DataGrid(
       toast("コピーするセルを選んでください");
       return;
     }
-    const bounds = selectionBounds(selection, columns.length);
+    const bounds = selectionBounds(selection, columns.length, hidden);
     const selectedRows = bounds.rows
       .map((r) => rows[r])
       .filter((r): r is GridRow => r !== undefined);
@@ -349,6 +469,7 @@ export const DataGrid = forwardRef<GridHandle, Props>(function DataGrid(
         e.shiftKey,
         rows.length,
         columns.length,
+        hidden,
       );
       setSelection(next);
       if (next?.mode === "cells") {
@@ -360,7 +481,15 @@ export const DataGrid = forwardRef<GridHandle, Props>(function DataGrid(
       e.preventDefault();
       const step =
         Math.max(1, Math.floor(height / ROW_HEIGHT) - 1) * (e.key === "PageDown" ? 1 : -1);
-      const next = moveSelection(selection, step, 0, e.shiftKey, rows.length, columns.length);
+      const next = moveSelection(
+        selection,
+        step,
+        0,
+        e.shiftKey,
+        rows.length,
+        columns.length,
+        hidden,
+      );
       setSelection(next);
       if (next?.mode === "cells") {
         scrollToRow(next.focus.row);
@@ -445,7 +574,7 @@ export const DataGrid = forwardRef<GridHandle, Props>(function DataGrid(
   }
 
   function onHeaderClick(e: MouseEvent, name: string) {
-    if (!onSort) {
+    if (!onSort || resizing.current) {
       return;
     }
     const current = sort ?? [];
@@ -475,32 +604,64 @@ export const DataGrid = forwardRef<GridHandle, Props>(function DataGrid(
     disabled: (f === "update" || f === "where") && !canKeyCopy,
   }));
 
-  const menuItems: MenuItem[] = menu?.formatsOnly
-    ? [{ kind: "heading", label: "形式を指定してコピー" }, ...formatItems]
-    : [
-        { label: "コピー", keyText: keyLabel("grid.copy"), onSelect: () => void copy("tsv") },
-        {
-          label: "ヘッダ付きでコピー",
-          keyText: keyLabel("grid.copyWithHeader"),
-          onSelect: () => void copy("tsvWithHeader"),
-        },
-        { kind: "separator" },
-        { kind: "heading", label: `形式を指定してコピー ${keyLabel("grid.copyAs")}`.trim() },
-        ...formatItems,
-        ...(fkCell() && onForeignKey
-          ? ([
-              { kind: "separator" },
-              {
-                label: "外部キーの参照先へ",
-                keyText: keyLabel("grid.followForeignKey"),
-                onSelect: followForeignKey,
-              },
-            ] satisfies MenuItem[])
-          : []),
-        ...(editMenu && editMenu.length > 0
-          ? ([{ kind: "separator" }, ...editMenu] satisfies MenuItem[])
-          : []),
-      ];
+  const headerCol = menu?.column;
+  const headerItems: MenuItem[] =
+    headerCol === undefined
+      ? []
+      : [
+          {
+            label: `列「${columns[headerCol]?.name ?? ""}」を非表示`,
+            onSelect: () => hideColumn(headerCol),
+            disabled: visible.length <= 1,
+          },
+          {
+            label:
+              hidden.size > 0 ? `すべての列を表示(${hidden.size}列を再表示)` : "すべての列を表示",
+            onSelect: () => showColumns([...hidden]),
+            disabled: hidden.size === 0,
+          },
+          { kind: "separator" },
+          {
+            label: "列幅を自動調整",
+            onSelect: () => resetWidth(headerCol),
+            disabled: !customWidths?.has(headerCol),
+          },
+          {
+            label: "すべての列幅を自動調整",
+            onSelect: () => updateLayout({ widths: () => new Map() }),
+            disabled: !customWidths?.size,
+          },
+        ];
+
+  const menuItems: MenuItem[] =
+    headerCol !== undefined
+      ? headerItems
+      : menu?.formatsOnly
+        ? [{ kind: "heading", label: "形式を指定してコピー" }, ...formatItems]
+        : [
+            { label: "コピー", keyText: keyLabel("grid.copy"), onSelect: () => void copy("tsv") },
+            {
+              label: "ヘッダ付きでコピー",
+              keyText: keyLabel("grid.copyWithHeader"),
+              onSelect: () => void copy("tsvWithHeader"),
+            },
+            { kind: "separator" },
+            { kind: "heading", label: `形式を指定してコピー ${keyLabel("grid.copyAs")}`.trim() },
+            ...formatItems,
+            ...(fkCell() && onForeignKey
+              ? ([
+                  { kind: "separator" },
+                  {
+                    label: "外部キーの参照先へ",
+                    keyText: keyLabel("grid.followForeignKey"),
+                    onSelect: followForeignKey,
+                  },
+                ] satisfies MenuItem[])
+              : []),
+            ...(editMenu && editMenu.length > 0
+              ? ([{ kind: "separator" }, ...editMenu] satisfies MenuItem[])
+              : []),
+          ];
 
   const sortMark = (name: string) => {
     const list = sort ?? [];
@@ -516,7 +677,37 @@ export const DataGrid = forwardRef<GridHandle, Props>(function DataGrid(
     );
   };
 
-  const totalWidth = ROW_NUMBER_WIDTH + widths.reduce((a, b) => a + b, 0);
+  const totalWidth = ROW_NUMBER_WIDTH + visible.reduce((a, i) => a + (shownWidths[i] ?? 0), 0);
+
+  /** Hidden columns just left of a shown column (and, for the last one, right of it). */
+  function hiddenAround(col: number): { before: number[]; after: number[] } {
+    const pos = visible.indexOf(col);
+    const prev = pos > 0 ? (visible[pos - 1] ?? -1) : -1;
+    const next = pos === visible.length - 1 ? columns.length : col;
+    return { before: between(prev, col), after: between(col, next) };
+  }
+
+  function hiddenMarker(cols: number[], side: "l" | "r") {
+    if (cols.length === 0) {
+      return null;
+    }
+    const names = cols.map((i) => columns[i]?.name ?? "").join(", ");
+    return (
+      <button
+        type="button"
+        className={`hidc ${side}`}
+        title={`非表示の列を表示: ${names}`}
+        aria-label={`非表示の列 ${names} を表示`}
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          showColumns(cols);
+        }}
+      >
+        {side === "l" ? "◂" : "▸"}
+      </button>
+    );
+  }
   const visibleRows = rows.slice(first, last);
 
   return (
@@ -533,38 +724,65 @@ export const DataGrid = forwardRef<GridHandle, Props>(function DataGrid(
       <table className="g" style={{ width: totalWidth }}>
         <colgroup>
           <col style={{ width: ROW_NUMBER_WIDTH }} />
-          {widths.map((w, i) => (
+          {visible.map((i) => (
             // Query results can repeat a column name, so the position is the identity.
-            // oxlint-disable-next-line react/no-array-index-key
-            <col key={i} style={{ width: w }} />
+            <col key={i} style={{ width: shownWidths[i] }} />
           ))}
         </colgroup>
         <thead>
           <tr>
             <th className="rn" aria-label="行番号" />
-            {columns.map((c) => (
-              <th
-                key={c.name}
-                onClick={(e) => onHeaderClick(e, c.name)}
-                title={onSort ? "クリックでソート、Shift+クリックで複合ソート" : undefined}
-              >
-                {c.key && <span className="pkfk pk">PK</span>}
-                {c.foreignKey && <span className="pkfk fk">FK</span>}
-                {c.name}
-                {sortMark(c.name)}
-                <span className="ty">
-                  {c.typeName || " "}
-                  {c.foreignKey ? ` → ${c.foreignKey}` : ""}
-                </span>
-              </th>
-            ))}
+            {visible.map((ci) => {
+              const c = columns[ci];
+              if (!c) {
+                return null;
+              }
+              const around = hiddenAround(ci);
+              return (
+                <th
+                  key={ci}
+                  onClick={(e) => onHeaderClick(e, c.name)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setMenu({ x: e.clientX, y: e.clientY, column: ci });
+                  }}
+                  title={
+                    onSort
+                      ? "クリックでソート、Shift+クリックで複合ソート、右クリックで列のメニュー"
+                      : "右クリックで列のメニュー"
+                  }
+                >
+                  {hiddenMarker(around.before, "l")}
+                  {hiddenMarker(around.after, "r")}
+                  {c.key && <span className="pkfk pk">PK</span>}
+                  {c.foreignKey && <span className="pkfk fk">FK</span>}
+                  {c.name}
+                  {sortMark(c.name)}
+                  <span className="ty">
+                    {c.typeName || " "}
+                    {c.foreignKey ? ` → ${c.foreignKey}` : ""}
+                  </span>
+                  {/* oxlint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- mouse-only, like spreadsheets; the menu offers the same. */}
+                  <span
+                    className="rz"
+                    title="ドラッグで列幅を変更、ダブルクリックで自動調整"
+                    onMouseDown={(e) => startResize(e, ci)}
+                    onClick={(e) => e.stopPropagation()}
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      resetWidth(ci);
+                    }}
+                  />
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>
           {first > 0 && (
             <tr style={{ height: first * ROW_HEIGHT }} aria-hidden="true">
               <td
-                colSpan={columns.length + 1}
+                colSpan={visible.length + 1}
                 style={{ padding: 0, border: 0 }}
                 aria-label="スクロール領域"
               />
@@ -590,7 +808,11 @@ export const DataGrid = forwardRef<GridHandle, Props>(function DataGrid(
                 >
                   {r + 1}
                 </td>
-                {columns.map((c, ci) => {
+                {visible.map((ci) => {
+                  const c = columns[ci];
+                  if (!c) {
+                    return null;
+                  }
                   const v = row[ci] ?? null;
                   const selected = !rowSelected && isCellSelected(selection, r, ci);
                   const anchor =
@@ -705,7 +927,7 @@ export const DataGrid = forwardRef<GridHandle, Props>(function DataGrid(
           {last < rows.length && (
             <tr style={{ height: (rows.length - last) * ROW_HEIGHT }} aria-hidden="true">
               <td
-                colSpan={columns.length + 1}
+                colSpan={visible.length + 1}
                 style={{ padding: 0, border: 0 }}
                 aria-label="スクロール領域"
               />
@@ -714,7 +936,7 @@ export const DataGrid = forwardRef<GridHandle, Props>(function DataGrid(
           {(loading || hasMore) && (
             <tr className="loadmore">
               <td className="rn" aria-label="行番号" />
-              <td colSpan={columns.length}>
+              <td colSpan={visible.length}>
                 {loading ? "読み込み中…" : "スクロールで次の500行を読み込みます"}
               </td>
             </tr>
@@ -722,7 +944,7 @@ export const DataGrid = forwardRef<GridHandle, Props>(function DataGrid(
           {!loading && rows.length === 0 && (
             <tr className="loadmore">
               <td className="rn" aria-label="行番号" />
-              <td colSpan={Math.max(1, columns.length)}>{emptyText ?? "行はありません"}</td>
+              <td colSpan={Math.max(1, visible.length)}>{emptyText ?? "行はありません"}</td>
             </tr>
           )}
         </tbody>

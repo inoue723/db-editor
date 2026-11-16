@@ -182,3 +182,36 @@ test("rebinds a command in the shortcut editor", async ({ page, mockIpc, ipcCall
   });
   await expect(dialog.locator(".chip.custom")).toBeVisible();
 });
+
+test("resizes, hides and shows columns from the header", async ({ page, mockIpc }) => {
+  await mockIpc(responses);
+  const { grid } = await openUsers(page);
+  const nameHeader = grid.getByRole("columnheader", { name: /^name/ });
+
+  const before = (await nameHeader.boundingBox())?.width ?? 0;
+  const handle = nameHeader.locator(".rz");
+  const box = await handle.boundingBox();
+  if (!box) {
+    throw new Error("no resize handle");
+  }
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 80, box.y + box.height / 2, { steps: 4 });
+  await page.mouse.up();
+  await expect
+    .poll(async () => (await nameHeader.boundingBox())?.width ?? 0)
+    .toBeGreaterThan(before + 60);
+
+  await nameHeader.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "列「name」を非表示" }).click();
+  await expect(nameHeader).toHaveCount(0);
+  await expect(grid).not.toContainText("Ann");
+
+  // Arrow keys skip the hidden column.
+  await grid.locator("td.num", { hasText: /^1$/ }).click();
+  await page.keyboard.press("ArrowRight");
+  await expect(grid.locator("td.anchor")).toHaveText("30");
+
+  await grid.getByRole("button", { name: "非表示の列 name を表示" }).click();
+  await expect(grid).toContainText("Ann");
+});

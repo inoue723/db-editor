@@ -151,6 +151,8 @@ export function TableView({
   const [error, setError] = useState<string | null>(null);
   const [activeRowIndex, setActiveRowIndex] = useState<number | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
+  /** Columns hidden in the grid; Set NULL / DEFAULT skip them. */
+  const [hiddenColumns, setHiddenColumns] = useState<ReadonlySet<number>>(() => new Set());
   const generation = useRef(0);
   // Set synchronously so that two scroll events never request the same page twice.
   const loadingMore = useRef(false);
@@ -520,7 +522,7 @@ export function TableView({
     if (!requireEditable() || !selection) {
       return;
     }
-    const b = selectionBounds(selection, names.length);
+    const b = selectionBounds(selection, names.length, hiddenColumns);
     const n = write(b.rows.flatMap((row) => b.cols.map((col) => ({ row, col, value }))));
     if (n === 0) {
       toast("変更できるセルがありません");
@@ -873,14 +875,25 @@ export function TableView({
       text += ` · 未保存 ${dirty}行`;
     }
     if (selection) {
-      const b = selectionBounds(selection, columns.length);
+      const b = selectionBounds(selection, columns.length, hiddenColumns);
       text +=
         selection.mode === "rows"
           ? ` · ${b.rows.length}行を選択`
           : ` · 選択 ${b.rows.length}行×${b.cols.length}列`;
     }
     onStatus(text);
-  }, [active, data, info, tab.filter, tab.view, selection, columns.length, dirty, onStatus]);
+  }, [
+    active,
+    data,
+    info,
+    tab.filter,
+    tab.view,
+    selection,
+    columns.length,
+    hiddenColumns,
+    dirty,
+    onStatus,
+  ]);
 
   const toolbar = (
     <div className="toolbar">
@@ -1047,6 +1060,7 @@ export function TableView({
               copyTable={copyTable}
               onForeignKey={onGridForeignKey}
               onActiveRowChange={onActiveRowChange}
+              onHiddenColumnsChange={setHiddenColumns}
               resetKey={`${JSON.stringify(tab.filter)}|${JSON.stringify(tab.sort)}|${tab.reload}`}
               emptyText={tab.filter ? "条件に一致する行はありません" : "行はありません"}
             />

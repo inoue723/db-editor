@@ -38,3 +38,17 @@ test("row-number clicks: plain, Shift range and ⌘ toggle", () => {
   expect(two).toEqual({ mode: "rows", rows: [2, 7], anchor: 7 });
   expect(clickRow(clickRow(two, 2, false, true), 7, false, true)).toBeNull();
 });
+
+test("hidden columns are skipped by arrow keys and left out of the bounds", () => {
+  const hidden = new Set([1, 2]);
+  expect(moveSelection(cellSelection(0, 0), 0, 1, false, 5, 5, hidden)).toEqual(
+    cellSelection(0, 3),
+  );
+  expect(moveSelection(cellSelection(0, 3), 0, -1, false, 5, 5, hidden)).toEqual(
+    cellSelection(0, 0),
+  );
+  expect(moveSelection(null, 0, 0, false, 5, 5, new Set([0]))).toEqual(cellSelection(0, 1));
+  const sel = { mode: "cells" as const, anchor: { row: 0, col: 0 }, focus: { row: 1, col: 3 } };
+  expect(selectionBounds(sel, 5, hidden)).toEqual({ rows: [0, 1], cols: [0, 3] });
+  expect(selectionBounds({ mode: "rows", rows: [0], anchor: 0 }, 4, hidden).cols).toEqual([0, 3]);
+});
