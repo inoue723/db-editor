@@ -5,7 +5,7 @@ import { ConnectionWindow } from "./connection/ConnectionWindow";
 import { Launcher } from "./launcher/Launcher";
 import "./styles.css";
 import { ToastProvider } from "./ui/Toast";
-import { UpdateNotice } from "./updater/UpdateNotice";
+import { UpdaterProvider } from "./updater/Updater";
 
 const root = document.getElementById("root");
 if (!root) {
@@ -22,11 +22,14 @@ createRoot(root).render(
         <CommandProvider>
           <ConnectionWindow />
         </CommandProvider>
+      ) : import.meta.env.PROD ? (
+        <UpdaterProvider>
+          <Launcher />
+        </UpdaterProvider>
       ) : (
+        // Dev builds and browser E2E runs have no release to update to.
         <Launcher />
       )}
     </ToastProvider>
-    {/* Dev builds and browser E2E runs have no release to update to. */}
-    {import.meta.env.PROD && !isConnectionWindow && <UpdateNotice />}
   </StrictMode>,
 );

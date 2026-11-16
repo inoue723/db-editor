@@ -5,6 +5,7 @@ import { ENV_LABEL, ENVIRONMENTS, relativeTime } from "../lib/env";
 import { Menu, type MenuItem } from "../ui/Menu";
 import { Confirm } from "../ui/Modal";
 import { useToast } from "../ui/Toast";
+import { useUpdater } from "../updater/Updater";
 import { ConnectionDialog } from "./ConnectionDialog";
 
 const ALL = "すべて";
@@ -15,6 +16,7 @@ type Profile = ConnectionProfile_Serialize;
 /** The start screen: saved connections as cards (spec 3.1). */
 export function Launcher() {
   const toast = useToast();
+  const updater = useUpdater();
   const [profiles, setProfiles] = useState<Profile[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [group, setGroup] = useState(ALL);
@@ -139,6 +141,16 @@ export function Launcher() {
               onChange={(e) => setQuery(e.currentTarget.value)}
             />
             <span className="kbd version">v{import.meta.env.APP_VERSION}</span>
+            {updater && (
+              <button
+                type="button"
+                className="sbtn"
+                disabled={updater.checking}
+                onClick={() => void updater.checkNow()}
+              >
+                {updater.checking ? "確認中…" : "更新を確認"}
+              </button>
+            )}
             <button type="button" className="pbtn" onClick={() => setEditing("new")}>
               新しい接続
             </button>
