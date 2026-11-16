@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/inoue723/db-editor/compare/v0.2.0...v0.2.1) (2026-11-16)
+
+
+### Features
+
+* resize and hide grid columns ([#45](https://github.com/inoue723/db-editor/issues/45)) ([79c4cea](https://github.com/inoue723/db-editor/commit/79c4ceae9af1ae5632fd43084f0573850e3335b0))
+
 ## [0.2.0](https://github.com/inoue723/db-editor/compare/v0.0.5...v0.2.0) (2026-11-04)
 
 
