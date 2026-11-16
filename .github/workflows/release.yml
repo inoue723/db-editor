@@ -45,7 +45,21 @@ jobs:
           # Step env is evaluated even when `if` is false, and fromJSON('') fails the job when
           # no release PR was created (e.g. a chore: push), so parse the JSON in the shell.
           PR_JSON: ${{ steps.release.outputs.pr }}
-        run: gh pr merge "$(jq -r .number <<<"$PR_JSON")" --squash
+        # GitHub occasionally answers the merge with a 5xx; retry, and treat a merge that
+        # went through despite the error as success.
+        run: |
+          number="$(jq -r .number <<<"$PR_JSON")"
+          for attempt in 1 2 3 4; do
+            if gh pr merge "$number" --squash; then
+              exit 0
+            fi
+            if [ "$(gh pr view "$number" --json state --jq .state)" = MERGED ]; then
+              exit 0
+            fi
+            echo "merge attempt $attempt failed; retrying"
+            sleep $((attempt * 15))
+          done
+          exit 1
       - id: tag
         if: steps.merge.outcome == 'success'
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
