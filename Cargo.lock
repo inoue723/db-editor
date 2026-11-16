@@ -1080,7 +1080,7 @@ dependencies = [
 
 [[package]]
 name = "db-editor"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "db-editor-core",
  "db-editor-pg",
@@ -1105,7 +1105,7 @@ dependencies = [
 
 [[package]]
 name = "db-editor-core"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "insta",
  "proptest",
@@ -1117,7 +1117,7 @@ dependencies = [
 
 [[package]]
 name = "db-editor-pg"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "db-editor-core",
  "futures-util",

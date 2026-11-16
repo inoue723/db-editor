@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/inoue723/db-editor/compare/v0.2.1...v0.2.2) (2026-11-16)
+
+
+### Features
+
+* check for updates on demand and offer them in a toast ([#47](https://github.com/inoue723/db-editor/issues/47)) ([5bc1441](https://github.com/inoue723/db-editor/commit/5bc1441549f0fd4fad95d27a19c262ecfee46bc1))
+
 ## [0.2.1](https://github.com/inoue723/db-editor/compare/v0.2.0...v0.2.1) (2026-11-16)
 
 
