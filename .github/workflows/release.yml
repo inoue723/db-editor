@@ -29,6 +29,15 @@ jobs:
       release_created: ${{ steps.release.outputs.release_created || steps.tag.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name || steps.tag.outputs.tag_name }}
     steps:
+      # Re-running this job after its release PR was merged makes release-please work from a
+      # half-finished release: it once turned 0.2.2 into "0.2.0" and rebuilt old tags. Recover by
+      # pushing a commit (with a `Release-As:` footer if needed) instead. Re-running only failed
+      # build or publish jobs does not re-run this job and is fine.
+      - name: Refuse a re-run
+        if: fromJSON(github.run_attempt) > 1
+        run: |
+          echo "::error::Do not re-run release-please. Check whether the release PR was merged, then push a commit to main instead."
+          exit 1
       - id: release
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:

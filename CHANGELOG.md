@@ -5,40 +5,6 @@
 
 ### Features
 
-* check for updates on demand and offer them in a toast ([#47](https://github.com/inoue723/db-editor/issues/47)) ([5bc1441](https://github.com/inoue723/db-editor/commit/5bc1441549f0fd4fad95d27a19c262ecfee46bc1))
-* resize and hide grid columns ([#45](https://github.com/inoue723/db-editor/issues/45)) ([79c4cea](https://github.com/inoue723/db-editor/commit/79c4ceae9af1ae5632fd43084f0573850e3335b0))
-
-## [0.2.0](https://github.com/inoue723/db-editor/compare/v0.2.2...v0.2.0) (2026-11-16)
-
-
-### Features
-
-* add in-app auto-update with the Tauri updater ([#3](https://github.com/inoue723/db-editor/issues/3)) ([bf62e06](https://github.com/inoue723/db-editor/commit/bf62e060db1fdb0be3f87a1e1ae18521ad30cbc9))
-* check for updates on demand and offer them in a toast ([#47](https://github.com/inoue723/db-editor/issues/47)) ([5bc1441](https://github.com/inoue723/db-editor/commit/5bc1441549f0fd4fad95d27a19c262ecfee46bc1))
-* implement v0.1 (connections, table browsing, SQL editor, copy) ([#10](https://github.com/inoue723/db-editor/issues/10)) ([50423eb](https://github.com/inoue723/db-editor/commit/50423eb75ba1ae44f9f399a1a476716531e4153a))
-* implement v0.2 (row editing, paste, undo, command palette, shortcut editor) ([#16](https://github.com/inoue723/db-editor/issues/16)) ([3191414](https://github.com/inoue723/db-editor/commit/31914147a03340d1a8acbe3519ffbc265b0f74a1))
-* resize and hide grid columns ([#45](https://github.com/inoue723/db-editor/issues/45)) ([79c4cea](https://github.com/inoue723/db-editor/commit/79c4ceae9af1ae5632fd43084f0573850e3335b0))
-* show the app version in the window ([#8](https://github.com/inoue723/db-editor/issues/8)) ([a67ee2e](https://github.com/inoue723/db-editor/commit/a67ee2e869f660564c69d9905bc74749c990d5f1))
-
-
-### Bug Fixes
-
-* build releases from the tagged commit ([#14](https://github.com/inoue723/db-editor/issues/14)) ([65afdd8](https://github.com/inoue723/db-editor/commit/65afdd8adcd8528ce328cbe7c508a856f4fbb1d6))
-* merge the release PR and publish the release automatically ([#12](https://github.com/inoue723/db-editor/issues/12)) ([60a093e](https://github.com/inoue723/db-editor/commit/60a093e1981cfe0797af88ec66409d8a457f4ff1))
-* start releases at 0.0.1 instead of 1.0.0 ([#5](https://github.com/inoue723/db-editor/issues/5)) ([bdf2b09](https://github.com/inoue723/db-editor/commit/bdf2b098322d4dc8a60616346de55c7b8886f3e2))
-
-## [0.2.2](https://github.com/inoue723/db-editor/compare/v0.2.1...v0.2.2) (2026-11-16)
-
-
-### Features
-
-* check for updates on demand and offer them in a toast ([#47](https://github.com/inoue723/db-editor/issues/47)) ([5bc1441](https://github.com/inoue723/db-editor/commit/5bc1441549f0fd4fad95d27a19c262ecfee46bc1))
-
-## [0.2.1](https://github.com/inoue723/db-editor/compare/v0.2.0...v0.2.1) (2026-11-16)
-
-
-### Features
-
 * resize and hide grid columns ([#45](https://github.com/inoue723/db-editor/issues/45)) ([79c4cea](https://github.com/inoue723/db-editor/commit/79c4ceae9af1ae5632fd43084f0573850e3335b0))
 
 ## [0.2.0](https://github.com/inoue723/db-editor/compare/v0.0.5...v0.2.0) (2026-11-04)
