@@ -1008,6 +1008,39 @@ table.g {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.g thead th .rz {
+  position: absolute;
+  top: 0;
+  right: -1px;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 1;
+}
+.g thead th .rz:hover,
+.g thead th .rz:active {
+  background: var(--accent);
+  opacity: 0.5;
+}
+.g thead th .hidc {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 0;
+  padding: 0 1px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 9px;
+  line-height: 14px;
+  cursor: pointer;
+  z-index: 2;
+}
+.g thead th .hidc.l {
+  left: 0;
+}
+.g thead th .hidc.r {
+  right: 6px;
+}
 .g thead th .so {
   color: var(--accent);
   font-family: var(--mono);

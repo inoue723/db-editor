@@ -19,17 +19,25 @@ function range(a: number, b: number): number[] {
   return Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
 }
 
-/** Rows and columns covered by a selection, in display order. */
-export function selectionBounds(sel: Selection, columnCount: number): Bounds {
+/**
+ * Rows and columns covered by a selection, in display order. Hidden columns are left out:
+ * a rectangle drawn across a hidden column does not act on it.
+ */
+export function selectionBounds(
+  sel: Selection,
+  columnCount: number,
+  hidden?: ReadonlySet<number>,
+): Bounds {
+  const visible = (cols: number[]) => (hidden?.size ? cols.filter((c) => !hidden.has(c)) : cols);
   if (sel.mode === "rows") {
     return {
       rows: sel.rows.toSorted((a, b) => a - b),
-      cols: range(0, columnCount - 1),
+      cols: visible(range(0, columnCount - 1)),
     };
   }
   return {
     rows: range(sel.anchor.row, sel.focus.row),
-    cols: range(sel.anchor.col, sel.focus.col),
+    cols: visible(range(sel.anchor.col, sel.focus.col)),
   };
 }
 
@@ -62,7 +70,10 @@ export function cellSelection(row: number, col: number): Selection {
   return { mode: "cells", anchor: { row, col }, focus: { row, col } };
 }
 
-/** Moves (or with `extend`, grows) a cell selection by a step, clamped to the grid. */
+/**
+ * Moves (or with `extend`, grows) a cell selection by a step, clamped to the grid.
+ * Column steps skip hidden columns.
+ */
 export function moveSelection(
   sel: Selection | null,
   dRow: number,
@@ -70,19 +81,27 @@ export function moveSelection(
   extend: boolean,
   rowCount: number,
   colCount: number,
+  hidden?: ReadonlySet<number>,
 ): Selection | null {
-  if (rowCount === 0 || colCount === 0) {
+  const shown = range(0, colCount - 1).filter((c) => !hidden?.has(c));
+  if (rowCount === 0 || colCount === 0 || shown.length === 0) {
     return sel;
   }
-  const clamp = (c: Cell): Cell => ({
-    row: Math.max(0, Math.min(rowCount - 1, c.row)),
-    col: Math.max(0, Math.min(colCount - 1, c.col)),
-  });
+  const firstCol = shown[0] ?? 0;
   if (!sel) {
-    return cellSelection(0, 0);
+    return cellSelection(0, firstCol);
   }
-  const base: Cell = sel.mode === "cells" ? sel.focus : { row: sel.anchor, col: 0 };
-  const next = clamp({ row: base.row + dRow, col: base.col + dCol });
+  const base: Cell = sel.mode === "cells" ? sel.focus : { row: sel.anchor, col: firstCol };
+  // Position among the shown columns; a hidden focus counts as the next shown column.
+  let pos = shown.findIndex((c) => c >= base.col);
+  if (pos < 0) {
+    pos = shown.length - 1;
+  }
+  pos = Math.max(0, Math.min(shown.length - 1, pos + dCol));
+  const next: Cell = {
+    row: Math.max(0, Math.min(rowCount - 1, base.row + dRow)),
+    col: shown[pos] ?? firstCol,
+  };
   if (extend && sel.mode === "cells") {
     return { ...sel, focus: next };
   }
