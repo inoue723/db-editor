@@ -204,7 +204,7 @@ importers:
         version: 19.3.1(react@19.3.1)
       sql-formatter:
         specifier: ^15.9.0
-        version: 15.9.1
+        version: 15.10.0
     devDependencies:
       '@playwright/test':
         specifier: ^1.64.1
@@ -238,7 +238,7 @@ importers:
         version: 21.0.4
       knip:
         specifier: ^6.44.1
-        version: 6.46.1
+        version: 6.48.0
       lefthook:
         specifier: ^2.2.2
         version: 2.2.2
@@ -1361,8 +1361,8 @@ packages:
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
 
-  knip@6.46.1:
-    resolution: {integrity: sha512-5/ajqjZfmuv8O74+McrKBOSArKG6tsUgy6yJird36VZh9HiUq75qY4U39uqf9wjchEUOLrStuOZpFP057CZFRw==}
+  knip@6.48.0:
+    resolution: {integrity: sha512-v+Gfp6uiOeXaaj+Khk2Z7/fTTZYWLnDwxZapQUyy8WoQFLYXiUHXqRdFJTwRnrKNA1gPXTPi5NGTKKLXyImVrg==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
 
@@ -1632,8 +1632,8 @@ packages:
     resolution: {integrity: sha512-KGj/8Y43x35aZVDtt+J4mK1hoLGHULMYfSkODJNQjNDC3oW1PqPoxMwo0pLUsWM/UEGzON/NxeHywEfNXNP3Vw==}
     engines: {node: '>=0.10.0'}
 
-  sql-formatter@15.9.1:
-    resolution: {integrity: sha512-Xiwkk0F/5zPB8zZg5QrATyyhdu43lld6yok4oKVO29dubyGDjSRb21RsHpDOnN+xVvMTp3qL84mIsZNsJK+JWA==}
+  sql-formatter@15.10.0:
+    resolution: {integrity: sha512-9cdsDFzPQukym8i9Eedc72L9y/2wEi2pQZVE/3eXthFjDOnvvmzCIk+N6miWbBixdWXU2qdV92V7PLnvlNgEfA==}
     hasBin: true
 
   std-env@4.3.0:
@@ -2522,7 +2522,7 @@ snapshots:
 
   js-tokens@4.0.0: {}
 
-  knip@6.46.1:
+  knip@6.48.0:
     dependencies:
       formatly: 0.11.4
       get-tsconfig: 4.14.3
@@ -2825,7 +2825,7 @@ snapshots:
 
   source-map-js@1.2.2: {}
 
-  sql-formatter@15.9.1:
+  sql-formatter@15.10.0:
     dependencies:
       argparse: 2.0.1
       nearley: 2.20.1
